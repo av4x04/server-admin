@@ -226,6 +226,8 @@
       margin-top: 6px;
       overflow: auto;
       padding-right: 6px;
+      flex: 1;
+      min-height: 0;
     }
     .tab-item {
       display: flex;
@@ -286,12 +288,7 @@
     /* Server actions menu */
     .tab-actions {
       margin-left: auto;
-      opacity: 0;
-      transition: opacity 150ms ease-in-out;
       position: relative;
-    }
-    .tab-item:hover .tab-actions {
-      opacity: 1;
     }
     .actions-menu {
         display: none;
@@ -472,8 +469,15 @@
 
     /* Responsive */
     @media (max-width: 900px) {
-      .left-panel { display: none; }
       .app { padding: 14px; }
+      .workspace {
+        flex-direction: column;
+      }
+      .left-panel {
+        width: 100%;
+        max-width: none;
+        max-height: 40vh; /* Allow server list to take up to 40% of vertical height */
+      }
     }
   </style>
 </head>
