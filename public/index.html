@@ -242,7 +242,7 @@
       position: relative;
     }
     .tab-item:hover {
-      transform: translateY(-3px);
+      /* transform: translateY(-3px); */ /* <--- REMOVED this line to fix menu interaction bug */
       background: linear-gradient(90deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
       border: 1px solid rgba(255,255,255,0.03);
     }
@@ -469,14 +469,21 @@
 
     /* Responsive */
     @media (max-width: 900px) {
-      .app { padding: 14px; }
+      .app { 
+        padding: 14px; 
+        gap: 14px;
+      }
       .workspace {
         flex-direction: column;
       }
       .left-panel {
         width: 100%;
         max-width: none;
-        max-height: 40vh; /* Allow server list to take up to 40% of vertical height */
+        flex: 0 1 40vh; /* Don't grow, can shrink, basis of 40% viewport height */
+        min-height: 250px; /* Ensure it's usable */
+      }
+      .right-panel {
+        flex: 1 1 auto; /* Allow it to take remaining space */
       }
     }
   </style>
