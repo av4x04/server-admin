@@ -31,8 +31,8 @@
       margin: 0;
       padding: 0;
     }
+    /* REMOVED height: 100% to revert to old layout behavior */
     html, body {
-      height: 100%;
     }
     body {
       background:
@@ -43,7 +43,7 @@
       font-family: Inter, "Segoe UI", Roboto, system-ui, -apple-system, "Helvetica Neue", Arial;
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
-      overflow: hidden;
+      /* REMOVED overflow: hidden to allow natural page scroll if content exceeds viewport */
     }
 
     /* Pulsing logo */
@@ -54,7 +54,7 @@
 
     /* App Frame */
     .app {
-      height: 100vh;
+      /* REMOVED height: 100vh to allow natural content height */
       display: flex;
       flex-direction: column;
       gap: 18px;
@@ -81,7 +81,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      animation: pulse 2.5s ease-in-out infinite;
+      animation: pulse 2.s ease-in-out infinite;
     }
     .logo-badge i {
       color: #071014;
@@ -192,8 +192,7 @@
       display: flex;
       gap: 20px;
       align-items: stretch;
-      flex: 1;
-      min-height: 0;
+      /* REMOVED flex: 1 and min-height: 0 to revert to old layout */
     }
 
     /* Left panel */
@@ -226,8 +225,7 @@
       margin-top: 6px;
       overflow: auto;
       padding-right: 6px;
-      flex: 1;
-      min-height: 0;
+      /* REMOVED flex: 1 and min-height: 0 to revert to old layout */
     }
     .tab-item {
       display: flex;
@@ -332,13 +330,14 @@
     /* Right panel */
     .right-panel {
       flex: 1;
-      min-height: 0;
       display: flex;
       flex-direction: column;
       gap: 12px;
+      /* REMOVED min-height: 0 to revert to old layout */
     }
     .terminal-card {
-      flex: 1;
+      /* REMOVED flex: 1 and min-height: 0 */
+      height: 70vh; /* ADDED fixed height for stability */
       background: linear-gradient(180deg, rgba(8,8,10,0.9), rgba(14,14,16,0.95));
       border-radius: 14px;
       padding: 12px;
@@ -346,7 +345,6 @@
       box-shadow: 0 20px 60px rgba(2,6,23,0.6);
       display: flex;
       flex-direction: column;
-      min-height: 0;
       overflow: hidden;
       animation: animate__animated animate__zoomIn;
     }
@@ -479,11 +477,12 @@
       .left-panel {
         width: 100%;
         max-width: none;
-        flex: 0 1 40vh; /* Don't grow, can shrink, basis of 40% viewport height */
-        min-height: 250px; /* Ensure it's usable */
+      }
+      .terminal-card {
+        height: 50vh; /* Adjust height for mobile */
       }
       .right-panel {
-        flex: 1 1 auto; /* Allow it to take remaining space */
+        flex: 1 1 auto;
       }
     }
   </style>
