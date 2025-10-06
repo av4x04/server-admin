@@ -46,6 +46,7 @@ const serverListContainer = document.getElementById('server-list');
 const terminalTitle = document.getElementById('terminal-title');
 const terminalElement = document.getElementById('terminal');
 const loaderElement = document.getElementById('loader');
+const loaderText = document.getElementById('loader-text');
 
 // Modal elements
 const addServerModal = document.getElementById('add-server-modal');
@@ -57,9 +58,11 @@ const addServerForm = document.getElementById('add-server-form');
 
 /**
  * Hiển thị loader và ẩn terminal.
+ * @param {string} text - Tin nhắn hiển thị trên loader.
  */
-function showLoader() {
-  terminalElement.style.display = 'none';
+function showLoader(text = "Đang vỗ cánh kết nối...") {
+  terminalElement.style.opacity = '0.2';
+  loaderText.textContent = text;
   loaderElement.style.display = 'flex';
 }
 
@@ -68,7 +71,8 @@ function showLoader() {
  */
 function hideLoader() {
   loaderElement.style.display = 'none';
-  terminalElement.style.display = 'block';
+  terminalElement.style.opacity = '1';
+  term.focus();
 }
 
 /**
@@ -87,8 +91,8 @@ function connectToServer(url, name) {
 
   activeServerUrl = url;
   term.reset();
-  showLoader();
-  statusText.textContent = `Đang kết nối đến ${name}...`;
+  showLoader(`Đang kết nối đến ${name}...`);
+  statusText.textContent = `Đang kết nối...`;
   terminalTitle.textContent = name;
   
   document.querySelectorAll('#server-list .tab-item').forEach(item => {
@@ -101,15 +105,15 @@ function connectToServer(url, name) {
     console.log(`🟢 Đã kết nối đến server: ${url}`);
     statusText.textContent = `Đã kết nối: ${name}`;
     hideLoader();
-    term.write('\x1b[32m✅ Kết nối thành công!\x1b[0m\r\n');
+    // Không hiển thị message thành công trong terminal nữa
   });
 
   currentSocket.on('disconnect', () => {
     console.log(`🔴 Mất kết nối với server: ${url}`);
     if (activeServerUrl === url) {
         statusText.textContent = 'Mất kết nối';
-        hideLoader();
-        term.write('\x1b[31m⚠️  Mất kết nối với server.\x1b[0m\r\n');
+        showLoader('Mất kết nối. Đang thử lại... ⏳');
+        term.write('\r\n\x1b[31m⚠️  Mất kết nối với server. Đang thử kết nối lại...\x1b[0m\r\n');
     }
   });
 
@@ -117,8 +121,8 @@ function connectToServer(url, name) {
     console.error(`Lỗi kết nối đến ${url}:`, err.message);
     if (activeServerUrl === url) {
         statusText.textContent = `Lỗi kết nối`;
-        hideLoader();
-        term.write(`\x1b[31m❌ Không thể kết nối đến ${name}. Vui lòng kiểm tra lại URL và trạng thái server.\x1b[0m\r\n`);
+        showLoader('Không thể kết nối! 😭');
+        term.write(`\r\n\x1b[31m❌ Không thể kết nối đến ${name}. Vui lòng kiểm tra lại URL và trạng thái server.\x1b[0m\r\n`);
     }
   });
   
@@ -141,6 +145,9 @@ function renderServerList() {
     const iconClass = ICONS[index % ICONS.length];
     const serverElement = document.createElement('div');
     serverElement.className = 'tab-item';
+    if (server.url === activeServerUrl) {
+        serverElement.classList.add('active');
+    }
     serverElement.setAttribute('role', 'listitem');
     serverElement.dataset.url = server.url;
     serverElement.dataset.name = server.name;
@@ -161,19 +168,19 @@ function renderServerList() {
       </div>
     `;
     
-    // Event listener for connecting
     serverElement.addEventListener('click', (e) => {
-      // Don't connect if clicking on the action button
       if (!e.target.closest('.tab-actions')) {
         connectToServer(server.url, server.name);
       }
     });
 
-    // Event listeners for actions menu
     const actionBtn = serverElement.querySelector('.tab-actions-btn');
     const actionMenu = serverElement.querySelector('.actions-menu');
     actionBtn.addEventListener('click', (e) => {
       e.stopPropagation();
+      document.querySelectorAll('.actions-menu.visible').forEach(menu => {
+        if (menu !== actionMenu) menu.classList.remove('visible');
+      });
       actionMenu.classList.toggle('visible');
     });
 
@@ -191,11 +198,11 @@ function renderServerList() {
 
     serverListContainer.appendChild(serverElement);
   });
-  // Hide all action menus when clicking outside
-  document.body.addEventListener('click', () => {
-      document.querySelectorAll('.actions-menu.visible').forEach(menu => menu.classList.remove('visible'));
-  }, true);
 }
+
+document.body.addEventListener('click', () => {
+    document.querySelectorAll('.actions-menu.visible').forEach(menu => menu.classList.remove('visible'));
+}, false);
 
 
 /**
@@ -213,13 +220,13 @@ async function initializeDashboard() {
       connectToServer(servers[0].url, servers[0].name);
     } else {
       statusText.textContent = 'Không có server';
-      hideLoader();
+      showLoader('Không có server nào 😮');
       term.write('Chào mừng! Hãy thêm server đầu tiên bằng nút "+" ở bên trái.');
     }
   } catch (error) {
     console.error("Không thể tải danh sách server:", error);
     statusText.textContent = 'Lỗi tải danh sách';
-    hideLoader();
+    showLoader('Lỗi tải danh sách server! 😭');
     term.write(`\x1b[31m Lỗi: Không thể tải danh sách server. Vui lòng kiểm tra lại server admin.\x1b[0m`);
   }
 }
@@ -241,7 +248,6 @@ async function handleAddServer(e) {
     servers = await response.json();
     renderServerList();
     closeAddServerModal();
-    // Connect to the newly added server
     connectToServer(newServer.url, newServer.name);
   } catch (error) {
     console.error('Lỗi khi thêm server:', error);
@@ -252,31 +258,39 @@ async function handleAddServer(e) {
 async function handleDeleteServer(url, name) {
   if (!confirm(`Bạn có chắc chắn muốn xóa server "${name}" không?`)) return;
 
+  const serverToDelete = servers.find(s => s.url === url);
+  const serverIndex = servers.findIndex(s => s.url === url);
+  if (!serverToDelete) return;
+
+  // Optimistic UI update
+  servers.splice(serverIndex, 1);
+  renderServerList();
+  
+  if (activeServerUrl === url) {
+    activeServerUrl = null;
+    term.reset();
+    if (servers.length > 0) {
+      connectToServer(servers[0].url, servers[0].name);
+    } else {
+      statusText.textContent = 'Không có server';
+      showLoader('Tất cả server đã được xóa 텅.');
+      terminalTitle.textContent = "Terminal";
+    }
+  }
+
   try {
     const response = await fetch('/api/servers', {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url: url }),
     });
-    if (!response.ok) throw new Error('Failed to delete server');
-    servers = await response.json();
-    renderServerList();
-
-    // If the active server was deleted, connect to the first one
-    if (activeServerUrl === url) {
-        activeServerUrl = null; // reset active url
-        term.reset();
-        if (servers.length > 0) {
-            connectToServer(servers[0].url, servers[0].name);
-        } else {
-            statusText.textContent = 'Không có server';
-            hideLoader();
-            term.write('Tất cả server đã được xóa.');
-        }
-    }
+    if (!response.ok) throw new Error('Failed to delete server on backend');
   } catch (error) {
     console.error('Lỗi khi xóa server:', error);
-    alert('Không thể xóa server.');
+    alert('Không thể xóa server ở phía máy chủ. Khôi phục lại giao diện.');
+    // Rollback UI on error
+    servers.splice(serverIndex, 0, serverToDelete);
+    renderServerList();
   }
 }
 
@@ -285,7 +299,7 @@ async function handleResetServer(resetUrl, name) {
       alert(`Server "${name}" không có URL Reset được cấu hình.`);
       return;
   }
-  if (!confirm(`Bạn có chắc chắn muốn khởi động lại server "${name}" không?`)) return;
+  if (!confirm(`Bạn có chắc chắn muốn khởi động lại server "${name}" không? 🚀`)) return;
   
   try {
       const response = await fetch('/api/servers/reset', {
@@ -296,6 +310,9 @@ async function handleResetServer(resetUrl, name) {
       const result = await response.json();
       if (!response.ok) throw new Error(result.message || 'Failed to send reset request');
       alert(`Đã gửi yêu cầu khởi động lại cho server "${name}".`);
+      if(activeServerUrl === servers.find(s => s.name === name)?.url) {
+        showLoader(`Đang khởi động lại ${name}...`);
+      }
   } catch (error) {
       console.error('Lỗi khi reset server:', error);
       alert(`Không thể khởi động lại server: ${error.message}`);
@@ -311,7 +328,6 @@ function openAddServerModal() {
 function closeAddServerModal() {
   addServerModal.style.display = 'none';
 }
-
 
 function toggleFullscreen() {
     if (!document.fullscreenElement) {
