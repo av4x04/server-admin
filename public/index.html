@@ -213,7 +213,9 @@
       flex-direction: column;
       gap: 10px;
       margin-top: 6px;
-      overflow: auto;
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
       padding-right: 6px;
     }
     .tab-item {
@@ -471,14 +473,14 @@
     /* Loader */
     #loader {
         position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
+        inset: 0;
+        background: rgba(15, 17, 19, 0.8);
+        backdrop-filter: blur(4px);
         display: none;
         flex-direction: column;
         align-items: center;
         justify-content: center;
+        gap: 12px;
         color: var(--muted);
         font-size: 14px;
         z-index: 5;
@@ -489,12 +491,14 @@
         white-space: pre;
         text-align: center;
         color: #fff;
-        animation: bobbing 1s infinite ease-in-out;
-        margin-bottom: 12px;
+        animation: waddle 1.2s infinite ease-in-out;
     }
-    @keyframes bobbing {
-        0%, 100% { transform: translateY(0); }
-        50% { transform: translateY(-12px); }
+    @keyframes waddle {
+      0% { transform: translateY(0) rotate(-2deg); }
+      25% { transform: translateY(-8px) rotate(0deg); }
+      50% { transform: translateY(0) rotate(2deg); }
+      75% { transform: translateY(-8px) rotate(0deg); }
+      100% { transform: translateY(0) rotate(-2deg); }
     }
 
 
@@ -540,7 +544,7 @@
     <div class="workspace">
       <aside class="left-panel" aria-label="Server List">
         <div class="tabs-header">
-          <div class="tabs-title">DANH SÁCH SERVER</div>
+          <div class="tabs-title">DANH SÁCH SERVER 🖥️</div>
           <button class="btn" id="add-server-btn" title="Thêm server mới">
             <i class="fas fa-plus"></i>
           </button>
@@ -563,7 +567,7 @@
           </div>
           <div id="loader">
             <pre class="duck-loader">  __&#x000A;&lt;(o )___&#x000A; ( ._> /&#x000A;  `---'</pre>
-            Đang vỗ cánh kết nối...
+            <div id="loader-text">Đang vỗ cánh kết nối...</div>
           </div>
           <div id="terminal"></div>
         </section>
@@ -574,22 +578,22 @@
   <!-- Add Server Modal -->
   <div id="add-server-modal" class="modal-overlay">
     <div class="modal-content">
-      <h2>Thêm Server Mới</h2>
+      <h2>Thêm Server Mới ✨</h2>
       <form id="add-server-form">
         <div class="form-group">
-          <label for="server-name">Tên Server</label>
+          <label for="server-name">Tên Server 📛</label>
           <input type="text" id="server-name" name="name" required placeholder="VD: Production Server">
         </div>
         <div class="form-group">
-          <label for="server-url">URL Terminal</label>
+          <label for="server-url">URL Terminal 🔗</label>
           <input type="url" id="server-url" name="url" required placeholder="https://your-server.onrender.com">
         </div>
         <div class="form-group">
-          <label for="server-reset-url">URL Reset (Deploy Hook)</label>
+          <label for="server-reset-url">URL Reset 🚀</label>
           <input type="url" id="server-reset-url" name="resetUrl" placeholder="https://api.render.com/deploy/...">
         </div>
         <div class="form-group">
-            <label for="server-description">Mô tả (Tùy chọn)</label>
+            <label for="server-description">Mô tả 📝</label>
             <input type="text" id="server-description" name="description" placeholder="VD: Server chính cho dự án X">
         </div>
         <div class="modal-actions">
