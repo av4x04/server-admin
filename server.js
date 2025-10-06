@@ -5,39 +5,35 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 4000;
 
-// This list now acts as a default for first-time users.
-// The user can add, edit, and remove servers, which will be saved in their browser's local storage.
+// Danh sách các server con cần quản lý
+// Bạn có thể thêm hoặc bớt các server ở đây
 const SERVERS = [
   {
     name: 'Server A - Main Project',
     url: 'https://server-v1-c2nb.onrender.com/',
-    description: 'Main production server',
-    // Example Deploy Hook URL for the reset feature.
-    deployHookUrl: 'https://api.render.com/deploy/srv-d3fupkripnbc73bi0c0g?key=7NlFsc1B2Dg'
+    description: 'Main production server'
   },
   {
     name: 'Server B - Staging',
     url: 'https://your-second-server.onrender.com/', // << THAY URL SERVER CỦA BẠN VÀO ĐÂY
-    description: 'Staging environment',
-    deployHookUrl: '' // Leave empty if no deploy hook
+    description: 'Staging environment'
   },
   {
     name: 'Server C - Dev',
     url: 'https://your-third-server.onrender.com/', // << THAY URL SERVER CỦA BẠN VÀO ĐÂY
-    description: 'Development instance',
-    deployHookUrl: ''
+    description: 'Development instance'
   }
 ];
 
-// API endpoint to client to get the default list of servers
+// API endpoint để client lấy danh sách server
 app.get('/api/servers', (req, res) => {
   res.json(SERVERS);
 });
 
-// Serve static files from the 'public' directory
+// Phục vụ các file tĩnh từ thư mục 'public'
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Any request that doesn't match a static file will return index.html
+// Bất kỳ request nào không khớp sẽ trả về index.html
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
