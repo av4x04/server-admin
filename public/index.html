@@ -20,7 +20,6 @@
       --muted: #8b8f92;
       --accent: #00d084;
       --accent-2: #00b37a;
-      --danger: #ff7b7b;
       --glass: rgba(255,255,255,0.03);
       --border: rgba(255,255,255,0.04);
       --shadow: 0 10px 30px rgba(2,6,23,0.7);
@@ -129,6 +128,7 @@
       font-size: 13px;
       transition: all 180ms ease;
       box-shadow: 0 6px 18px rgba(2,6,23,0.45);
+      -webkit-tap-highlight-color: transparent;
     }
     .btn:hover {
       transform: translateY(-4px) scale(1.02);
@@ -139,16 +139,6 @@
       color: var(--muted);
       border: 1px solid rgba(255,255,255,0.03);
       background: transparent;
-    }
-    .btn.primary {
-        background: var(--accent);
-        color: var(--bg);
-        border-color: var(--accent-2);
-    }
-    .btn.danger {
-        background: var(--danger);
-        color: white;
-        border-color: #ff5252;
     }
 
     /* Status */
@@ -213,9 +203,7 @@
       flex-direction: column;
       gap: 10px;
       margin-top: 6px;
-      flex: 1;
-      min-height: 0;
-      overflow-y: auto;
+      overflow: auto;
       padding-right: 6px;
     }
     .tab-item {
@@ -228,7 +216,6 @@
       transition: all 150ms ease;
       border: 1px solid transparent;
       background: var(--glass);
-      position: relative;
     }
     .tab-item:hover {
       transform: translateY(-3px);
@@ -251,13 +238,11 @@
       border: 1px solid rgba(255,255,255,0.03);
       color: var(--muted);
       font-size: 16px;
-      flex-shrink: 0;
     }
     .tab-meta {
       display: flex;
       flex-direction: column;
       min-width: 0;
-      flex-grow: 1;
     }
     .tab-name {
       font-weight: 600;
@@ -276,55 +261,9 @@
     }
     .tab-actions {
       margin-left: auto;
-      position: relative;
+      display: flex;
+      gap: 8px;
     }
-    .tab-actions-btn {
-        background: transparent;
-        border: none;
-        color: var(--muted);
-        cursor: pointer;
-        padding: 4px 8px;
-        border-radius: 6px;
-    }
-    .tab-actions-btn:hover {
-        background: var(--glass);
-        color: #fff;
-    }
-    .actions-menu {
-        display: none;
-        position: absolute;
-        right: 0;
-        top: 100%;
-        background: #1a1c1f;
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        padding: 6px;
-        list-style: none;
-        z-index: 10;
-        width: 150px;
-        box-shadow: 0 8px 20px rgba(0,0,0,0.4);
-    }
-    .actions-menu.visible {
-        display: block;
-    }
-    .actions-menu li {
-        padding: 8px 12px;
-        border-radius: 6px;
-        font-size: 13px;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-    .actions-menu li:hover {
-        background-color: var(--accent);
-        color: var(--bg);
-    }
-    .actions-menu li.delete:hover {
-        background-color: var(--danger);
-        color: #fff;
-    }
-
 
     /* Right panel */
     .right-panel {
@@ -346,7 +285,6 @@
       min-height: 0;
       overflow: hidden;
       animation: animate__animated animate__zoomIn;
-      position: relative;
     }
     .terminal-top {
       display: flex;
@@ -412,100 +350,67 @@
       border-radius: 999px;
     }
 
-    /* Modal styles */
-    .modal-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0,0,0,0.7);
-        backdrop-filter: blur(8px);
-        display: none;
-        align-items: center;
-        justify-content: center;
-        z-index: 100;
+    /* Mobile specific styles */
+    .mobile-menu-btn {
+      display: none;
+      font-size: 16px;
+      padding: 8px 10px;
     }
-    .modal-content {
-        background: var(--panel);
-        border: 1px solid var(--border);
-        padding: 24px;
-        border-radius: var(--radius);
-        width: 90%;
-        max-width: 500px;
-        box-shadow: var(--shadow);
-        animation: animate__animated animate__fadeInUp animate__faster;
+    .overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.6);
+      z-index: 999;
+      display: none;
+      opacity: 0;
+      transition: opacity 300ms ease;
     }
-    .modal-content h2 {
-        font-size: 18px;
-        margin-bottom: 16px;
-        color: #fff;
+    .overlay.active {
+      display: block;
+      opacity: 1;
     }
-    .form-group {
-        margin-bottom: 16px;
-    }
-    .form-group label {
-        display: block;
-        font-size: 13px;
-        color: var(--muted);
-        margin-bottom: 6px;
-    }
-    .form-group input {
-        width: 100%;
-        padding: 10px;
-        background: rgba(0,0,0,0.3);
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        color: #fff;
-        font-size: 14px;
-    }
-    .form-group input:focus {
-        outline: none;
-        border-color: var(--accent);
-    }
-    .modal-actions {
-        display: flex;
-        justify-content: flex-end;
-        gap: 10px;
-        margin-top: 24px;
-    }
-
-    /* Loader */
-    #loader {
-        position: absolute;
-        inset: 0;
-        background: rgba(15, 17, 19, 0.8);
-        backdrop-filter: blur(4px);
-        display: none;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 12px;
-        color: var(--muted);
-        font-size: 14px;
-        z-index: 5;
-    }
-    .duck-loader {
-        font-family: monospace;
-        font-size: 24px;
-        white-space: pre;
-        text-align: center;
-        color: #fff;
-        animation: waddle 1.2s infinite ease-in-out;
-    }
-    @keyframes waddle {
-      0% { transform: translateY(0) rotate(-2deg); }
-      25% { transform: translateY(-8px) rotate(0deg); }
-      50% { transform: translateY(0) rotate(2deg); }
-      75% { transform: translateY(-8px) rotate(0deg); }
-      100% { transform: translateY(0) rotate(-2deg); }
-    }
-
 
     /* Responsive */
     @media (max-width: 900px) {
-      .left-panel { display: none; }
-      .app { padding: 14px; }
+      .app { padding: 14px; gap: 14px; }
+      
+      .title .main { font-size: 15px; }
+      .title .sub { display: none; }
+      .logo-badge { width: 44px; height: 44px; }
+      
+      .controls .btn span {
+        display: none;
+      }
+      .controls .btn {
+        padding: 8px 10px;
+      }
+      .mobile-menu-btn {
+        display: inline-flex;
+      }
+
+      .left-panel {
+        position: fixed;
+        left: 0;
+        top: 0;
+        height: 100%;
+        z-index: 1000;
+        transform: translateX(-100%);
+        transition: transform 300ms ease-in-out;
+        width: 300px;
+        max-width: 80vw;
+        border-radius: 0 var(--radius) var(--radius) 0;
+      }
+      .left-panel.is-open {
+        transform: translateX(0);
+      }
+      
+      .tabs-header .mobile-menu-btn {
+          display: inline-flex;
+          margin-left: auto;
+      }
     }
   </style>
 </head>
@@ -513,15 +418,20 @@
   <div class="app">
     <!-- Top bar / Brand -->
     <div class="topbar">
-      <div class="brand">
-        <div class="logo-badge">
-          <i class="fas fa-shield-halved"></i>
-        </div>
-        <div class="title">
-          <div class="main">Admin Dashboard</div>
-          <div class="sub">
-            <i class="fas fa-code-branch"></i>
-            <span>Server Manager</span>
+      <div style="display:flex;align-items:center;gap:12px">
+         <button class="btn ghost mobile-menu-btn" onclick="toggleMenu()" title="Mở menu">
+          <i class="fas fa-bars"></i>
+        </button>
+        <div class="brand">
+          <div class="logo-badge">
+            <i class="fas fa-shield-halved"></i>
+          </div>
+          <div class="title">
+            <div class="main">Admin Dashboard</div>
+            <div class="sub">
+              <i class="fas fa-code-branch"></i>
+              <span>Server Manager</span>
+            </div>
           </div>
         </div>
       </div>
@@ -534,7 +444,7 @@
         </div>
         <div class="controls">
           <button class="btn ghost" onclick="toggleFullscreen()" title="Chế độ toàn màn hình">
-            <i class="fas fa-expand"></i> Toàn màn hình
+            <i class="fas fa-expand"></i> <span>Toàn màn hình</span>
           </button>
         </div>
       </div>
@@ -544,9 +454,9 @@
     <div class="workspace">
       <aside class="left-panel" aria-label="Server List">
         <div class="tabs-header">
-          <div class="tabs-title">DANH SÁCH SERVER 🖥️</div>
-          <button class="btn" id="add-server-btn" title="Thêm server mới">
-            <i class="fas fa-plus"></i>
+          <div class="tabs-title">DANH SÁCH SERVER</div>
+          <button class="btn ghost mobile-menu-btn" onclick="toggleMenu()" title="Đóng menu">
+            <i class="fas fa-times"></i>
           </button>
         </div>
         <div class="tab-list" id="server-list" role="list">
@@ -565,48 +475,32 @@
             <div id="terminal-title" style="margin-left:12px;font-weight:600;color:#dff8ef">Terminal</div>
             <div style="margin-left:auto;color:var(--muted);font-size:13px">Shell: bash · UTF-8</div>
           </div>
-          <div id="loader">
-            <pre class="duck-loader">  __&#x000A;&lt;(o )___&#x000A; ( ._> /&#x000A;  `---'</pre>
-            <div id="loader-text">Đang vỗ cánh kết nối...</div>
-          </div>
           <div id="terminal"></div>
         </section>
       </main>
     </div>
-  </div>
-
-  <!-- Add Server Modal -->
-  <div id="add-server-modal" class="modal-overlay">
-    <div class="modal-content">
-      <h2>Thêm Server Mới ✨</h2>
-      <form id="add-server-form">
-        <div class="form-group">
-          <label for="server-name">Tên Server 📛</label>
-          <input type="text" id="server-name" name="name" required placeholder="VD: Production Server">
-        </div>
-        <div class="form-group">
-          <label for="server-url">URL Terminal 🔗</label>
-          <input type="url" id="server-url" name="url" required placeholder="https://your-server.onrender.com">
-        </div>
-        <div class="form-group">
-          <label for="server-reset-url">URL Reset 🚀</label>
-          <input type="url" id="server-reset-url" name="resetUrl" placeholder="https://api.render.com/deploy/...">
-        </div>
-        <div class="form-group">
-            <label for="server-description">Mô tả 📝</label>
-            <input type="text" id="server-description" name="description" placeholder="VD: Server chính cho dự án X">
-        </div>
-        <div class="modal-actions">
-          <button type="button" class="btn ghost" id="cancel-add-server">Hủy</button>
-          <button type="submit" class="btn primary">Lưu</button>
-        </div>
-      </form>
-    </div>
+    <div class="overlay" onclick="toggleMenu()"></div>
   </div>
 
   <!-- Scripts -->
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xterm@4/lib/xterm.js"></script>
   <script src="client.js"></script>
+  <script>
+    function toggleMenu() {
+      document.querySelector('.left-panel').classList.toggle('is-open');
+      document.querySelector('.overlay').classList.toggle('active');
+    }
+    // Make it globally accessible for client.js
+    window.toggleMenu = toggleMenu;
+
+    function toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen();
+      } else if (document.exitFullscreen) {
+        document.exitFullscreen();
+      }
+    }
+  </script>
 </body>
 </html>
