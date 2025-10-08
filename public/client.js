@@ -42,7 +42,7 @@ const HARDCODED_SERVERS = [
         uid: 'hardcoded-1',
         name: 'Terminal-v1',
         url: 'https://server-terminal-v1-rvg9.onrender.com',
-        description: 'Default Server 1',
+        description: 'Server-Terminal 🚀',
         deployHookUrl: '',
         isHardcoded: true
     },
@@ -50,7 +50,7 @@ const HARDCODED_SERVERS = [
         uid: 'hardcoded-2',
         name: 'Terminal-v2',
         url: 'https://server-terminal-v2-lil8.onrender.com',
-        description: 'Default Server 2',
+        description: 'Server-Terminal 🚀',
         deployHookUrl: '',
         isHardcoded: true
     }
