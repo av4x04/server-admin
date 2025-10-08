@@ -158,38 +158,19 @@ function renderServerList() {
 }
 
 /**
- * Shows a connection animation in the terminal overlay.
+ * Shows a connection message in the terminal overlay.
  * @param {object} server - The server object being connected to.
  */
 function showConnectionAnimation(server) {
-    if (connectionAnimationInterval) clearInterval(connectionAnimationInterval);
+    if (connectionAnimationInterval) {
+        clearInterval(connectionAnimationInterval);
+        connectionAnimationInterval = null;
+    }
     term.reset();
     terminalLoader.classList.remove('hidden');
 
-    const duckFrames = [
-`
-                     ,~~.     
-                    (  6 )-_,  
-               (\\\___ )=='-'
-                \`---'   '      
-`,
-`
-                     ,~~.     
-                    (  6 )-_,  
-               (\\\___ )_ o o 
-                \`---'--' '  
-`
-    ];
-    let frameIndex = 0;
-    
-    const updateLoader = () => {
-        loaderAscii.textContent = duckFrames[frameIndex];
-        frameIndex = (frameIndex + 1) % duckFrames.length;
-    };
-    
+    loaderAscii.textContent = '\n(>_<)\n\n';
     loaderText.textContent = `Connecting to ${server.name}...`;
-    updateLoader();
-    connectionAnimationInterval = setInterval(updateLoader, 350);
 }
 
 
@@ -213,7 +194,7 @@ function connectToServer(server) {
   currentSocket = io(server.url, { transports: ['websocket'] });
 
   currentSocket.on('connect', () => {
-    clearInterval(connectionAnimationInterval);
+    if (connectionAnimationInterval) clearInterval(connectionAnimationInterval);
     connectionAnimationInterval = null;
     terminalLoader.classList.add('hidden');
     console.log(`🟢 Connected to server: ${server.url}`);
@@ -222,7 +203,7 @@ function connectToServer(server) {
   });
 
   currentSocket.on('disconnect', () => {
-    clearInterval(connectionAnimationInterval);
+    if (connectionAnimationInterval) clearInterval(connectionAnimationInterval);
     connectionAnimationInterval = null;
     terminalLoader.classList.add('hidden');
     console.log(`🔴 Disconnected from server: ${server.url}`);
@@ -250,6 +231,14 @@ function connectToServer(server) {
     }
     term.write(history);
   });
+
+  currentSocket.on('reboot-status', (status) => {
+    if (status.success) {
+        term.write(`\r\n\x1b[32m[Server] ${status.message}\x1b[0m\r\n`);
+    } else {
+        term.write(`\r\n\x1b[31m[Server Error] ${status.message}\x1b[0m\r\n`);
+    }
+  });
 }
 
 async function handleReboot(server) {
@@ -257,18 +246,14 @@ async function handleReboot(server) {
         term.write(`\r\n\x1b[31m[Error] Server '${server.name}' has no Deploy Hook URL configured.\x1b[0m\r\n`);
         return;
     }
-    term.write(`\r\n\x1b[33m[Reboot] Triggering deploy hook for '${server.name}'...\x1b[0m\r\n`);
-    try {
-        const response = await fetch(server.deployHookUrl, { method: 'POST' });
-        if (response.ok) {
-            term.write(`\x1b[32m[Success] Deploy hook triggered. Server is rebooting.\x1b[0m\r\n`);
-        } else {
-            term.write(`\x1b[31m[Error] Deploy hook failed with status: ${response.status} ${response.statusText}\x1b[0m\r\n`);
-        }
-    } catch (error) {
-        console.error("Reboot error:", error);
-        term.write(`\x1b[31m[Error] Network error while triggering deploy hook: ${error.message}\x1b[0m\r\n`);
+
+    if (activeServerUrl !== server.url || !currentSocket || !currentSocket.connected) {
+        term.write(`\r\n\x1b[31m[Error] You must be actively connected to '${server.name}' to issue a reboot command.\x1b[0m\r\n`);
+        return;
     }
+
+    term.write(`\r\n\x1b[33m[Reboot] Sending reboot command to '${server.name}'...\x1b[0m\r\n`);
+    currentSocket.emit('reboot-request');
 }
 
 function handleDelete(serverToDelete) {
