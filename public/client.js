@@ -231,33 +231,39 @@ function connectToServer(server) {
     }
     term.write(history);
   });
-
-  currentSocket.on('reboot-status', (status) => {
-    if (status.success) {
-        term.write(`\r\n\x1b[32m[Server] ${status.message}\x1b[0m\r\n`);
-    } else {
-        term.write(`\r\n\x1b[31m[Server Error] ${status.message}\x1b[0m\r\n`);
-    }
-  });
 }
 
 async function handleReboot(server) {
+    // Bước 1: Kiểm tra xem URL deploy hook đã được cấu hình ở phía client chưa.
     if (!server.deployHookUrl) {
-        term.write(`\r\n\x1b[31m[Error] Server '${server.name}' has no Deploy Hook URL configured.\x1b[0m\r\n`);
+        term.write(`\r\n\x1b[31m[Lỗi] Server '${server.name}' chưa được cấu hình Deploy Hook URL.\x1b[0m\r\n`);
+        term.write(`\r\n\x1b[33mVui lòng chỉnh sửa thông tin server để thêm deploy hook.\x1b[0m\r\n`);
         return;
     }
 
-    if (activeServerUrl !== server.url || !currentSocket || !currentSocket.connected) {
-        term.write(`\r\n\x1b[31m[Error] You must be actively connected to '${server.name}' to issue a reboot command.\x1b[0m\r\n`);
-        return;
-    }
+    term.write(`\r\n\x1b[33m[Reboot] Đang gửi lệnh reboot đến '${server.name}'...\x1b[0m\r\n`);
+    
+    // Bước 2: Gọi trực tiếp webhook từ client.
+    try {
+        // Chúng ta sử dụng chế độ 'no-cors' vì nhiều webhook không trả về các header CORS
+        // cần thiết để trình duyệt đọc phản hồi. Lệnh này sẽ gửi yêu cầu đi
+        // mà không cần CORS preflight, nhưng chúng ta không thể kiểm tra phản hồi.
+        // Đối với một trigger reboot "bắn và quên", điều này là đủ.
+        await fetch(server.deployHookUrl, { 
+            method: 'POST',
+            mode: 'no-cors'
+        });
 
-    term.write(`\r\n\x1b[33m[Reboot] Sending reboot command to '${server.name}'...\x1b[0m\r\n`);
-    currentSocket.emit('reboot-request');
+        term.write(`\r\n\x1b[32m[Reboot] Tín hiệu reboot đã được gửi thành công. Server sẽ sớm khởi động lại.\x1b[0m\r\n`);
+        
+    } catch (error) {
+        console.error('Lỗi khi kích hoạt deploy hook:', error);
+        term.write(`\r\n\x1b[31m[Lỗi Reboot] Không thể gửi lệnh reboot: ${error.message}\x1b[0m\r\n`);
+    }
 }
 
 function handleDelete(serverToDelete) {
-    if (!confirm(`Are you sure you want to delete the server '${serverToDelete.name}'? This action cannot be undone.`)) return;
+    if (!confirm(`Bạn có chắc muốn xóa server '${serverToDelete.name}' không? Hành động này không thể hoàn tác.`)) return;
 
     servers = servers.filter(s => s.uid !== serverToDelete.uid);
     saveServers();
@@ -273,7 +279,7 @@ function handleDelete(serverToDelete) {
             connectToServer(servers[0]);
         } else {
             statusText.textContent = 'No Server Selected';
-            term.write('No servers available. Please add a server to begin.');
+            term.write('Không có server nào. Vui lòng thêm một server để bắt đầu.');
         }
     }
     renderServerList();
