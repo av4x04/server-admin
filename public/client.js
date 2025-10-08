@@ -138,10 +138,6 @@ async function initializeDashboard() {
       
       serverElement.addEventListener('click', () => {
         connectToServer(server.url, server.name);
-        // Tự động đóng menu trên di động sau khi chọn
-        if (window.innerWidth <= 900 && document.querySelector('.left-panel.is-open')) {
-          window.toggleMenu();
-        }
       });
       
       serverListContainer.appendChild(serverElement);
@@ -160,6 +156,14 @@ async function initializeDashboard() {
     statusText.textContent = 'Lỗi tải danh sách';
     term.write(`\x1b[31m Lỗi: Không thể tải danh sách server. Vui lòng kiểm tra file server.js trên server admin.\x1b[0m`);
   }
+}
+
+function toggleFullscreen() {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen();
+    } else if (document.exitFullscreen) {
+      document.exitFullscreen();
+    }
 }
 
 // Khởi chạy khi trang được tải

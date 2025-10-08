@@ -128,7 +128,6 @@
       font-size: 13px;
       transition: all 180ms ease;
       box-shadow: 0 6px 18px rgba(2,6,23,0.45);
-      -webkit-tap-highlight-color: transparent;
     }
     .btn:hover {
       transform: translateY(-4px) scale(1.02);
@@ -350,67 +349,10 @@
       border-radius: 999px;
     }
 
-    /* Mobile specific styles */
-    .mobile-menu-btn {
-      display: none;
-      font-size: 16px;
-      padding: 8px 10px;
-    }
-    .overlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0,0,0,0.6);
-      z-index: 999;
-      display: none;
-      opacity: 0;
-      transition: opacity 300ms ease;
-    }
-    .overlay.active {
-      display: block;
-      opacity: 1;
-    }
-
     /* Responsive */
     @media (max-width: 900px) {
-      .app { padding: 14px; gap: 14px; }
-      
-      .title .main { font-size: 15px; }
-      .title .sub { display: none; }
-      .logo-badge { width: 44px; height: 44px; }
-      
-      .controls .btn span {
-        display: none;
-      }
-      .controls .btn {
-        padding: 8px 10px;
-      }
-      .mobile-menu-btn {
-        display: inline-flex;
-      }
-
-      .left-panel {
-        position: fixed;
-        left: 0;
-        top: 0;
-        height: 100%;
-        z-index: 1000;
-        transform: translateX(-100%);
-        transition: transform 300ms ease-in-out;
-        width: 300px;
-        max-width: 80vw;
-        border-radius: 0 var(--radius) var(--radius) 0;
-      }
-      .left-panel.is-open {
-        transform: translateX(0);
-      }
-      
-      .tabs-header .mobile-menu-btn {
-          display: inline-flex;
-          margin-left: auto;
-      }
+      .left-panel { display: none; }
+      .app { padding: 14px; }
     }
   </style>
 </head>
@@ -418,20 +360,15 @@
   <div class="app">
     <!-- Top bar / Brand -->
     <div class="topbar">
-      <div style="display:flex;align-items:center;gap:12px">
-         <button class="btn ghost mobile-menu-btn" onclick="toggleMenu()" title="Mở menu">
-          <i class="fas fa-bars"></i>
-        </button>
-        <div class="brand">
-          <div class="logo-badge">
-            <i class="fas fa-shield-halved"></i>
-          </div>
-          <div class="title">
-            <div class="main">Admin Dashboard</div>
-            <div class="sub">
-              <i class="fas fa-code-branch"></i>
-              <span>Server Manager</span>
-            </div>
+      <div class="brand">
+        <div class="logo-badge">
+          <i class="fas fa-shield-halved"></i>
+        </div>
+        <div class="title">
+          <div class="main">Admin Dashboard</div>
+          <div class="sub">
+            <i class="fas fa-code-branch"></i>
+            <span>Server Manager</span>
           </div>
         </div>
       </div>
@@ -444,7 +381,7 @@
         </div>
         <div class="controls">
           <button class="btn ghost" onclick="toggleFullscreen()" title="Chế độ toàn màn hình">
-            <i class="fas fa-expand"></i> <span>Toàn màn hình</span>
+            <i class="fas fa-expand"></i> Toàn màn hình
           </button>
         </div>
       </div>
@@ -455,9 +392,6 @@
       <aside class="left-panel" aria-label="Server List">
         <div class="tabs-header">
           <div class="tabs-title">DANH SÁCH SERVER</div>
-          <button class="btn ghost mobile-menu-btn" onclick="toggleMenu()" title="Đóng menu">
-            <i class="fas fa-times"></i>
-          </button>
         </div>
         <div class="tab-list" id="server-list" role="list">
           <!-- Server list will be dynamically populated here -->
@@ -479,28 +413,11 @@
         </section>
       </main>
     </div>
-    <div class="overlay" onclick="toggleMenu()"></div>
   </div>
 
   <!-- Scripts -->
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xterm@4/lib/xterm.js"></script>
   <script src="client.js"></script>
-  <script>
-    function toggleMenu() {
-      document.querySelector('.left-panel').classList.toggle('is-open');
-      document.querySelector('.overlay').classList.toggle('active');
-    }
-    // Make it globally accessible for client.js
-    window.toggleMenu = toggleMenu;
-
-    function toggleFullscreen() {
-      if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen();
-      } else if (document.exitFullscreen) {
-        document.exitFullscreen();
-      }
-    }
-  </script>
 </body>
 </html>
