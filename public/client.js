@@ -47,6 +47,9 @@ const serverListContainer = document.getElementById('server-list');
 const terminalTitle = document.getElementById('terminal-title');
 const modalOverlay = document.getElementById('modal-overlay');
 const serverForm = document.getElementById('server-form');
+const terminalLoader = document.getElementById('terminal-loader');
+const loaderAscii = document.getElementById('loader-ascii');
+const loaderText = document.getElementById('loader-text');
 
 const DEFAULT_SERVERS = [
     {
@@ -108,10 +111,10 @@ function renderServerList() {
                 <div class="tab-sub">${server.description || server.url}</div>
             </div>
             <div class="tab-actions">
-                <button class="options-btn" title="Tùy chọn"><i class="fas fa-ellipsis-v"></i></button>
+                <button class="options-btn" title="Options"><i class="fas fa-ellipsis-v"></i></button>
                 <div class="options-menu">
-                    <a href="#" class="reboot-btn"><i class="fas fa-sync-alt"></i> Khởi động lại</a>
-                    <a href="#" class="delete-btn delete"><i class="fas fa-trash-alt"></i> Xóa Server</a>
+                    <a href="#" class="reboot-btn"><i class="fas fa-sync-alt"></i> Reboot</a>
+                    <a href="#" class="delete-btn delete"><i class="fas fa-trash-alt"></i> Delete</a>
                 </div>
             </div>
         `;
@@ -155,31 +158,34 @@ function renderServerList() {
 }
 
 /**
- * Shows a connection animation in the terminal.
+ * Shows a connection animation in the terminal overlay.
  * @param {object} server - The server object being connected to.
  */
 function showConnectionAnimation(server) {
     if (connectionAnimationInterval) clearInterval(connectionAnimationInterval);
     term.reset();
+    terminalLoader.classList.remove('hidden');
 
     const duckFrames = [
-        '   __\n_<(o )~\n \\/---',
-        '   __\n_<(o )~\n  \\---/',
+        `\n           _
+         >(')____,
+          (\`  /
+         ----'   \n\n`,
+        `\n           _
+         >(')____,
+          (   /
+         ---='   \n\n`,
     ];
     let frameIndex = 0;
-    let dots = '';
-
-    connectionAnimationInterval = setInterval(() => {
-        dots = dots.length < 3 ? dots + '.' : '';
-        const text = `\x1b[33mĐang kết nối tới Vịt-chủ: \x1b[1m${server.name}\x1b[0m\x1b[33m${dots}\x1b[0m`;
-        
-        // \x1b[2J clears the screen, \x1b[H moves cursor to home
-        term.write('\x1b[2J\x1b[H'); 
-        term.write(text + '\r\n\r\n');
-        term.write(duckFrames[frameIndex] + '\r\n');
-        
+    
+    const updateLoader = () => {
+        loaderAscii.textContent = duckFrames[frameIndex];
         frameIndex = (frameIndex + 1) % duckFrames.length;
-    }, 400);
+    };
+    
+    loaderText.textContent = `Connecting to ${server.name}...`;
+    updateLoader();
+    connectionAnimationInterval = setInterval(updateLoader, 400);
 }
 
 
@@ -193,7 +199,7 @@ function connectToServer(server) {
   if (currentSocket) currentSocket.disconnect();
 
   activeServerUrl = server.url;
-  statusText.textContent = `Đang kết nối đến ${server.name}...`;
+  statusText.textContent = `Connecting...`;
   terminalTitle.textContent = server.name;
 
   showConnectionAnimation(server);
@@ -205,18 +211,20 @@ function connectToServer(server) {
   currentSocket.on('connect', () => {
     clearInterval(connectionAnimationInterval);
     connectionAnimationInterval = null;
-    console.log(`🟢 Đã kết nối đến server: ${server.url}`);
-    statusText.textContent = `Đã kết nối: ${server.name}`;
-    term.write('\r\n\x1b[32m✅ Vịt-chủ đã trả lời! Kết nối thành công!\x1b[0m\r\n');
+    terminalLoader.classList.add('hidden');
+    console.log(`🟢 Connected to server: ${server.url}`);
+    statusText.textContent = `Connected: ${server.name}`;
+    term.write(`\r\n\x1b[32m✅ Connection established to ${server.name}\x1b[0m\r\n`);
   });
 
   currentSocket.on('disconnect', () => {
     clearInterval(connectionAnimationInterval);
     connectionAnimationInterval = null;
-    console.log(`🔴 Mất kết nối với server: ${server.url}`);
+    terminalLoader.classList.add('hidden');
+    console.log(`🔴 Disconnected from server: ${server.url}`);
     if (activeServerUrl === server.url) {
-        statusText.textContent = 'Mất kết nối';
-        term.write('\r\n\x1b[31m⚠️ Vịt-chủ đi lạc rồi! Mất kết nối...\x1b[0m\r\n');
+        statusText.textContent = 'Disconnected';
+        term.write('\r\n\x1b[31m⚠️ Connection lost. Attempting to reconnect...\x1b[0m\r\n');
     }
   });
   
@@ -224,6 +232,7 @@ function connectToServer(server) {
       if(connectionAnimationInterval) { // Stop animation on first output
         clearInterval(connectionAnimationInterval);
         connectionAnimationInterval = null;
+        terminalLoader.classList.add('hidden');
       }
       term.write(data);
   });
@@ -232,6 +241,7 @@ function connectToServer(server) {
     if(connectionAnimationInterval) {
         clearInterval(connectionAnimationInterval);
         connectionAnimationInterval = null;
+        terminalLoader.classList.add('hidden');
         term.reset(); // Clear animation before writing history
     }
     term.write(history);
@@ -240,25 +250,25 @@ function connectToServer(server) {
 
 async function handleReboot(server) {
     if (!server.deployHookUrl) {
-        term.write(`\r\n\x1b[31m Lỗi: Server '${server.name}' không có "Nút Reboot thần kỳ" 🚀.\x1b[0m\r\n`);
+        term.write(`\r\n\x1b[31m[Error] Server '${server.name}' has no Deploy Hook URL configured.\x1b[0m\r\n`);
         return;
     }
-    term.write(`\r\n\x1b[33m🚀 Gửi tín hiệu vũ trụ để reboot '${server.name}'...\x1b[0m\r\n`);
+    term.write(`\r\n\x1b[33m[Reboot] Triggering deploy hook for '${server.name}'...\x1b[0m\r\n`);
     try {
         const response = await fetch(server.deployHookUrl, { method: 'POST' });
         if (response.ok) {
-            term.write(`\x1b[32m✅ Vịt-chủ đã nhận tín hiệu và đang khởi động lại!\x1b[0m\r\n`);
+            term.write(`\x1b[32m[Success] Deploy hook triggered. Server is rebooting.\x1b[0m\r\n`);
         } else {
-            term.write(`\x1b[31m❌ Tín hiệu vũ trụ bị nhiễu: ${response.status} ${response.statusText}\x1b[0m\r\n`);
+            term.write(`\x1b[31m[Error] Deploy hook failed with status: ${response.status} ${response.statusText}\x1b[0m\r\n`);
         }
     } catch (error) {
-        console.error("Lỗi reboot:", error);
-        term.write(`\x1b[31m❌ Lỗi mạng khi gửi tín hiệu: ${error.message}\x1b[0m\r\n`);
+        console.error("Reboot error:", error);
+        term.write(`\x1b[31m[Error] Network error while triggering deploy hook: ${error.message}\x1b[0m\r\n`);
     }
 }
 
 function handleDelete(serverToDelete) {
-    if (!confirm(`Bạn có chắc chắn muốn "thả" Vịt-chủ '${serverToDelete.name}' về với tự nhiên không? 🦆`)) return;
+    if (!confirm(`Are you sure you want to delete the server '${serverToDelete.name}'? This action cannot be undone.`)) return;
 
     servers = servers.filter(s => s.uid !== serverToDelete.uid);
     saveServers();
@@ -273,8 +283,8 @@ function handleDelete(serverToDelete) {
         if (servers.length > 0) {
             connectToServer(servers[0]);
         } else {
-            statusText.textContent = 'Trống';
-            term.write('Chuồng trống trơn. Hãy thêm một Vịt-chủ để bắt đầu.');
+            statusText.textContent = 'No Server Selected';
+            term.write('No servers available. Please add a server to begin.');
         }
     }
     renderServerList();
@@ -329,8 +339,10 @@ function initializeDashboard() {
   if (servers.length > 0) {
     connectToServer(servers[0]);
   } else {
-      statusText.textContent = 'Không có server nào';
-      term.write('Không tìm thấy Vịt-chủ nào. Hãy thêm một server để bắt đầu.');
+      statusText.textContent = 'No Servers';
+      terminalLoader.classList.remove('hidden');
+      loaderAscii.textContent = '\n(>_<)\n\n';
+      loaderText.textContent = 'No servers configured. Please add one to start.';
   }
 
   // Event Listeners
