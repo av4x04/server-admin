@@ -39,6 +39,7 @@ const STORAGE_KEY = 'admin-servers-list';
 let currentSocket = null;
 let activeServerUrl = null;
 let servers = [];
+let connectionAnimationInterval = null;
 
 // UI Elements
 const statusText = document.getElementById('status-text');
@@ -116,7 +117,11 @@ function renderServerList() {
         `;
 
         // Event listener for selecting the server
-        serverElement.addEventListener('click', () => connectToServer(server));
+        serverElement.addEventListener('click', (e) => {
+            if (!e.target.closest('.tab-actions')) {
+                connectToServer(server);
+            }
+        });
 
         // Event listeners for the options menu
         const optionsBtn = serverElement.querySelector('.options-btn');
@@ -149,6 +154,34 @@ function renderServerList() {
     });
 }
 
+/**
+ * Shows a connection animation in the terminal.
+ * @param {object} server - The server object being connected to.
+ */
+function showConnectionAnimation(server) {
+    if (connectionAnimationInterval) clearInterval(connectionAnimationInterval);
+    term.reset();
+
+    const duckFrames = [
+        '   __\n_<(o )~\n \\/---',
+        '   __\n_<(o )~\n  \\---/',
+    ];
+    let frameIndex = 0;
+    let dots = '';
+
+    connectionAnimationInterval = setInterval(() => {
+        dots = dots.length < 3 ? dots + '.' : '';
+        const text = `\x1b[33mĐang kết nối tới Vịt-chủ: \x1b[1m${server.name}\x1b[0m\x1b[33m${dots}\x1b[0m`;
+        
+        // \x1b[2J clears the screen, \x1b[H moves cursor to home
+        term.write('\x1b[2J\x1b[H'); 
+        term.write(text + '\r\n\r\n');
+        term.write(duckFrames[frameIndex] + '\r\n');
+        
+        frameIndex = (frameIndex + 1) % duckFrames.length;
+    }, 400);
+}
+
 
 /**
  * Establishes a Socket.IO connection to a specific server.
@@ -160,54 +193,72 @@ function connectToServer(server) {
   if (currentSocket) currentSocket.disconnect();
 
   activeServerUrl = server.url;
-  term.reset();
   statusText.textContent = `Đang kết nối đến ${server.name}...`;
   terminalTitle.textContent = server.name;
-  term.write(`\x1b[33m--- Đang kết nối đến ${server.name} (${server.url}) ---\x1b[0m\r\n`);
+
+  showConnectionAnimation(server);
 
   renderServerList(); // Re-render to update active state
 
   currentSocket = io(server.url, { transports: ['websocket'] });
 
   currentSocket.on('connect', () => {
+    clearInterval(connectionAnimationInterval);
+    connectionAnimationInterval = null;
     console.log(`🟢 Đã kết nối đến server: ${server.url}`);
     statusText.textContent = `Đã kết nối: ${server.name}`;
-    term.write('\x1b[32m✅ Kết nối thành công!\x1b[0m\r\n');
+    term.write('\r\n\x1b[32m✅ Vịt-chủ đã trả lời! Kết nối thành công!\x1b[0m\r\n');
   });
 
   currentSocket.on('disconnect', () => {
+    clearInterval(connectionAnimationInterval);
+    connectionAnimationInterval = null;
     console.log(`🔴 Mất kết nối với server: ${server.url}`);
     if (activeServerUrl === server.url) {
         statusText.textContent = 'Mất kết nối';
-        term.write('\x1b[31m⚠️  Mất kết nối với server.\x1b[0m\r\n');
+        term.write('\r\n\x1b[31m⚠️ Vịt-chủ đi lạc rồi! Mất kết nối...\x1b[0m\r\n');
     }
   });
   
-  currentSocket.on('output', data => term.write(data));
-  currentSocket.on('history', history => term.write(history));
+  currentSocket.on('output', data => {
+      if(connectionAnimationInterval) { // Stop animation on first output
+        clearInterval(connectionAnimationInterval);
+        connectionAnimationInterval = null;
+      }
+      term.write(data);
+  });
+
+  currentSocket.on('history', history => {
+    if(connectionAnimationInterval) {
+        clearInterval(connectionAnimationInterval);
+        connectionAnimationInterval = null;
+        term.reset(); // Clear animation before writing history
+    }
+    term.write(history);
+  });
 }
 
 async function handleReboot(server) {
     if (!server.deployHookUrl) {
-        term.write(`\x1b[31m Lỗi: Server '${server.name}' không có Deploy Hook URL được cấu hình.\x1b[0m\r\n`);
+        term.write(`\r\n\x1b[31m Lỗi: Server '${server.name}' không có "Nút Reboot thần kỳ" 🚀.\x1b[0m\r\n`);
         return;
     }
-    term.write(`\x1b[33m 🚀 Đang gửi yêu cầu khởi động lại đến '${server.name}'...\x1b[0m\r\n`);
+    term.write(`\r\n\x1b[33m🚀 Gửi tín hiệu vũ trụ để reboot '${server.name}'...\x1b[0m\r\n`);
     try {
         const response = await fetch(server.deployHookUrl, { method: 'POST' });
         if (response.ok) {
-            term.write(`\x1b[32m ✅ Yêu cầu khởi động lại đã được gửi thành công!\x1b[0m\r\n`);
+            term.write(`\x1b[32m✅ Vịt-chủ đã nhận tín hiệu và đang khởi động lại!\x1b[0m\r\n`);
         } else {
-            term.write(`\x1b[31m ❌ Lỗi khi gửi yêu cầu: ${response.status} ${response.statusText}\x1b[0m\r\n`);
+            term.write(`\x1b[31m❌ Tín hiệu vũ trụ bị nhiễu: ${response.status} ${response.statusText}\x1b[0m\r\n`);
         }
     } catch (error) {
         console.error("Lỗi reboot:", error);
-        term.write(`\x1b[31m ❌ Lỗi mạng khi gửi yêu cầu khởi động lại: ${error.message}\x1b[0m\r\n`);
+        term.write(`\x1b[31m❌ Lỗi mạng khi gửi tín hiệu: ${error.message}\x1b[0m\r\n`);
     }
 }
 
 function handleDelete(serverToDelete) {
-    if (!confirm(`Bạn có chắc chắn muốn xóa server '${serverToDelete.name}' không?`)) return;
+    if (!confirm(`Bạn có chắc chắn muốn "thả" Vịt-chủ '${serverToDelete.name}' về với tự nhiên không? 🦆`)) return;
 
     servers = servers.filter(s => s.uid !== serverToDelete.uid);
     saveServers();
@@ -222,8 +273,8 @@ function handleDelete(serverToDelete) {
         if (servers.length > 0) {
             connectToServer(servers[0]);
         } else {
-            statusText.textContent = 'Không có server nào';
-            term.write('Không tìm thấy server nào được cấu hình.');
+            statusText.textContent = 'Trống';
+            term.write('Chuồng trống trơn. Hãy thêm một Vịt-chủ để bắt đầu.');
         }
     }
     renderServerList();
@@ -235,14 +286,14 @@ function handleDelete(serverToDelete) {
  */
 function showModal() {
     serverForm.reset();
-    modalOverlay.style.display = 'flex';
+    modalOverlay.classList.add('show');
 }
 
 /**
  * Hides the modal.
  */
 function hideModal() {
-    modalOverlay.style.display = 'none';
+    modalOverlay.classList.remove('show');
 }
 
 function handleFormSubmit(event) {
@@ -279,7 +330,7 @@ function initializeDashboard() {
     connectToServer(servers[0]);
   } else {
       statusText.textContent = 'Không có server nào';
-      term.write('Không tìm thấy server nào. Hãy thêm một server để bắt đầu.');
+      term.write('Không tìm thấy Vịt-chủ nào. Hãy thêm một server để bắt đầu.');
   }
 
   // Event Listeners
