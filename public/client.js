@@ -167,14 +167,18 @@ function showConnectionAnimation(server) {
     terminalLoader.classList.remove('hidden');
 
     const duckFrames = [
-        `\n           _
-         >(')____,
-          (\`  /
-         ----'   \n\n`,
-        `\n           _
-         >(')____,
-          (   /
-         ---='   \n\n`,
+`
+                     ,~~.     
+                    (  6 )-_,  
+               (\\\___ )=='-'
+                \`---'   '      
+`,
+`
+                     ,~~.     
+                    (  6 )-_,  
+               (\\\___ )_ o o 
+                \`---'--' '  
+`
     ];
     let frameIndex = 0;
     
@@ -185,7 +189,7 @@ function showConnectionAnimation(server) {
     
     loaderText.textContent = `Connecting to ${server.name}...`;
     updateLoader();
-    connectionAnimationInterval = setInterval(updateLoader, 400);
+    connectionAnimationInterval = setInterval(updateLoader, 350);
 }
 
 
