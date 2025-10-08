@@ -108,10 +108,6 @@
       color: var(--accent);
       animation: animate__animated animate__heartBeat animate__infinite;
     }
-    .title .main i {
-        margin-left: 8px;
-        opacity: 0.7;
-    }
 
     /* Controls */
     .controls {
@@ -201,10 +197,6 @@
       color: #dff8ed;
       font-weight: 600;
       font-size: 13px;
-    }
-    .tabs-title i {
-        margin-left: 6px;
-        opacity: 0.7;
     }
     .tab-list {
       display: flex;
@@ -338,6 +330,7 @@
       display: flex;
       flex-direction: column;
       gap: 12px;
+      position: relative;
     }
     .terminal-card {
       flex: 1;
@@ -386,6 +379,43 @@
       border: 1px solid rgba(255,255,255,0.02);
       background: transparent !important;
     }
+    
+    /* Terminal Loader Overlay */
+    .terminal-loader-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(11, 11, 12, 0.7);
+        backdrop-filter: blur(5px);
+        z-index: 100;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        border-radius: 14px;
+        color: #e6eef2;
+        transition: opacity 300ms ease;
+    }
+    .terminal-loader-overlay.hidden {
+        opacity: 0;
+        pointer-events: none;
+    }
+    #loader-ascii {
+        font-family: monospace;
+        font-size: 16px; /* Increased font size for bigger duck */
+        line-height: 1;
+        white-space: pre;
+        color: var(--accent);
+    }
+    #loader-text {
+        margin-top: 20px;
+        font-size: 14px;
+        color: var(--muted);
+        letter-spacing: 0.5px;
+    }
+
 
     /* Modal Styles */
     .modal-overlay {
@@ -477,13 +507,13 @@
     <div class="topbar">
       <div class="brand">
         <div class="logo-badge">
-          <i class="fas fa-shield-halved"></i>
+          <i class="fas fa-terminal"></i>
         </div>
         <div class="title">
-          <div class="main">Admin Dashboard <i class="fas fa-ghost"></i></div>
+          <div class="main">Server Command Center</div>
           <div class="sub">
-            <i class="fas fa-code-branch"></i>
-            <span>Server Manager</span>
+            <i class="fas fa-cogs"></i>
+            <span>Multi-Terminal Management</span>
           </div>
         </div>
       </div>
@@ -492,11 +522,11 @@
       <div style="display:flex;align-items:center;gap:12px">
         <div class="status">
           <div class="status-dot" id="status-dot"></div>
-          <div id="status-text">Đang kết nối...</div>
+          <div id="status-text">Connecting...</div>
         </div>
         <div class="controls">
-          <button class="btn ghost" onclick="toggleFullscreen()" title="Chế độ toàn màn hình">
-            <i class="fas fa-expand"></i> Toàn màn hình
+          <button class="btn ghost" onclick="toggleFullscreen()" title="Fullscreen Mode">
+            <i class="fas fa-expand"></i> Fullscreen
           </button>
         </div>
       </div>
@@ -506,8 +536,8 @@
     <div class="workspace">
       <aside class="left-panel" aria-label="Server List">
         <div class="tabs-header">
-          <div class="tabs-title">DANH SÁCH SERVER <i class="fas fa-stream"></i></div>
-          <button id="add-server-btn" class="btn" title="Thêm server mới">
+          <div class="tabs-title">MANAGED SERVERS</div>
+          <button id="add-server-btn" class="btn" title="Add New Server">
               <i class="fas fa-plus"></i>
           </button>
         </div>
@@ -517,6 +547,10 @@
       </aside>
 
       <main class="right-panel">
+        <div id="terminal-loader" class="terminal-loader-overlay hidden">
+          <pre id="loader-ascii"></pre>
+          <p id="loader-text"></p>
+        </div>
         <section class="terminal-card" aria-label="Terminal">
           <div class="terminal-top">
             <div class="window-controls">
@@ -536,28 +570,28 @@
   <!-- Add/Edit Server Modal -->
   <div id="modal-overlay" class="modal-overlay">
     <div id="server-modal" class="modal-content animate__animated animate__fadeInUp">
-      <h3 id="modal-title">Thêm Vịt-chủ Mới <i class="fas fa-feather-alt"></i></h3>
+      <h3 id="modal-title">Add New Server <i class="fas fa-plus-circle"></i></h3>
       <form id="server-form">
         <input type="hidden" id="server-id">
         <div class="form-group">
-          <label for="server-name">Tên Vịt-chủ 🦆</label>
-          <input type="text" id="server-name" required placeholder="VD: Production API">
+          <label for="server-name">Server Name</label>
+          <input type="text" id="server-name" required placeholder="e.g., Production API">
         </div>
         <div class="form-group">
-          <label for="server-url">Địa chỉ Vịt-chủ 🌐</label>
+          <label for="server-url">Server URL</label>
           <input type="url" id="server-url" required placeholder="https://your-server.onrender.com/">
         </div>
         <div class="form-group">
-          <label for="server-description">Lý lịch Vịt-chủ 📝</label>
-          <input type="text" id="server-description" placeholder="VD: Server chính cho dự án X">
+          <label for="server-description">Description</label>
+          <input type="text" id="server-description" placeholder="e.g., Main server for Project X">
         </div>
         <div class="form-group">
-          <label for="server-deploy-hook">Nút Reboot thần kỳ 🚀</label>
-          <input type="url" id="server-deploy-hook" placeholder="Link webhook để reboot server">
+          <label for="server-deploy-hook">Deploy Hook URL (for reboot)</label>
+          <input type="url" id="server-deploy-hook" placeholder="Webhook URL to trigger a new deploy">
         </div>
         <div class="modal-actions">
-          <button type="button" id="cancel-btn" class="btn ghost">Hủy</button>
-          <button type="submit" class="btn">Lưu</button>
+          <button type="button" id="cancel-btn" class="btn ghost">Cancel</button>
+          <button type="submit" class="btn">Save</button>
         </div>
       </form>
     </div>
