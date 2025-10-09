@@ -25,15 +25,18 @@ const HARDCODED_UPTIME_SITES = [
     { uid: 'hc_site_1', name: 'Server Terminal v1', url: 'https://server-terminal-v1-rvg9.onrender.com', isHardcoded: true },
     { uid: 'hc_site_2', name: 'Server Terminal v2', url: 'https://server-terminal-v2-lil8.onrender.com', isHardcoded: true },
     { uid: 'hc_site_3', name: 'Server Terminal v3', url: 'https://server-terminal-v3-eqdx.onrender.com', isHardcoded: true },
-    { uid: 'hc_site_3', name: 'Server Terminal v4', url: 'https://server-terminal-v4.onrender.com', isHardcoded: true },
+    { uid: 'hc_site_4', name: 'Server Terminal v4', url: 'https://server-terminal-v4.onrender.com', isHardcoded: true },
 ];
 
-// In-memory state for uptime monitor
-const uptimeState = {
-    sites: [...HARDCODED_UPTIME_SITES], // Start with hardcoded sites
-    statuses: {},
-    checkIntervals: {},
-};
+// --- Refactored State Management ---
+// 1. Serializable Configuration Data: A clean list of sites to monitor.
+let sites = [...HARDCODED_UPTIME_SITES];
+
+// 2. Serializable Runtime Status: Stores the current status of each site.
+const statuses = {};
+
+// 3. Non-Serializable Runtime State: Stores interval IDs. NEVER sent to client.
+const checkIntervals = {};
 
 const CHECK_INTERVAL = 60000; // Check every 60 seconds
 
@@ -48,20 +51,20 @@ function checkSiteStatus(site) {
         const status = (res.statusCode >= 200 && res.statusCode < 400) ? 'up' : 'down';
         
         const update = { uid: site.uid, status, responseTime };
-        uptimeState.statuses[site.uid] = update;
+        statuses[site.uid] = update;
         io.emit('uptime:update', update);
 
         res.resume(); // Consume response data to free up memory
     }).on('error', (err) => {
         const update = { uid: site.uid, status: 'down', responseTime: -1 };
-        uptimeState.statuses[site.uid] = update;
+        statuses[site.uid] = update;
         io.emit('uptime:update', update);
     });
 
     req.on('timeout', () => {
         req.destroy();
         const update = { uid: site.uid, status: 'down', responseTime: -1 };
-        uptimeState.statuses[site.uid] = update;
+        statuses[site.uid] = update;
         io.emit('uptime:update', update);
     });
 }
@@ -71,11 +74,11 @@ function checkSiteStatus(site) {
  * @param {object} site - The site to monitor.
  */
 function startMonitoring(site) {
-    if (uptimeState.checkIntervals[site.uid]) {
-        clearInterval(uptimeState.checkIntervals[site.uid]);
+    if (checkIntervals[site.uid]) {
+        clearInterval(checkIntervals[site.uid]);
     }
     checkSiteStatus(site); // Initial check
-    uptimeState.checkIntervals[site.uid] = setInterval(() => checkSiteStatus(site), CHECK_INTERVAL);
+    checkIntervals[site.uid] = setInterval(() => checkSiteStatus(site), CHECK_INTERVAL);
 }
 
 /**
@@ -83,14 +86,14 @@ function startMonitoring(site) {
  * @param {string} uid - The unique ID of the site.
  */
 function stopMonitoring(uid) {
-    if (uptimeState.checkIntervals[uid]) {
-        clearInterval(uptimeState.checkIntervals[uid]);
-        delete uptimeState.checkIntervals[uid];
+    if (checkIntervals[uid]) {
+        clearInterval(checkIntervals[uid]);
+        delete checkIntervals[uid];
     }
 }
 
 // Start monitoring all initial sites
-uptimeState.sites.forEach(startMonitoring);
+sites.forEach(startMonitoring);
 
 
 io.on('connection', (socket) => {
@@ -102,12 +105,11 @@ io.on('connection', (socket) => {
 
   // --- Uptime Event Handlers ---
   socket.on('uptime:subscribe', () => {
-      // FIX: Create a clean object to send to the client, excluding non-serializable data.
-      const clientState = {
-        sites: uptimeState.sites,
-        statuses: uptimeState.statuses,
-      };
-      socket.emit('uptime:full_list', clientState);
+      // Always send a clean, serializable state to the client.
+      socket.emit('uptime:full_list', {
+        sites: sites,
+        statuses: statuses
+      });
   });
 
   socket.on('uptime:add_site', (siteData) => {
@@ -120,15 +122,15 @@ io.on('connection', (socket) => {
           isHardcoded: false, // User-added sites are not hardcoded
       };
       
-      uptimeState.sites.push(newSite);
+      sites.push(newSite);
       startMonitoring(newSite);
       io.emit('uptime:site_added', newSite);
   });
 
   socket.on('uptime:delete_site', (uid) => {
-      const siteIndex = uptimeState.sites.findIndex(s => s.uid === uid);
+      const siteIndex = sites.findIndex(s => s.uid === uid);
       if (siteIndex > -1) {
-          const site = uptimeState.sites[siteIndex];
+          const site = sites[siteIndex];
           // IMPORTANT: Prevent deleting hardcoded sites
           if (site.isHardcoded) {
               console.warn(`Attempted to delete hardcoded site: ${site.name}. Denied.`);
@@ -136,8 +138,8 @@ io.on('connection', (socket) => {
           }
           
           stopMonitoring(uid);
-          uptimeState.sites.splice(siteIndex, 1);
-          delete uptimeState.statuses[uid];
+          sites.splice(siteIndex, 1);
+          delete statuses[uid];
           io.emit('uptime:site_removed', uid);
       }
   });
