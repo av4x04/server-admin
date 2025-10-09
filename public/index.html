@@ -24,6 +24,8 @@
         --border: rgba(255,255,255,0.04);
         --shadow: 0 10px 30px rgba(2,6,23,0.7);
         --radius: 12px;
+        --red: #ff7b7b;
+        --red-bg: rgba(255, 82, 82, 0.1);
       }
 
       * {
@@ -138,6 +140,13 @@
         color: var(--muted);
         border: 1px solid rgba(255,255,255,0.03);
         background: transparent;
+      }
+       .btn.danger {
+        color: var(--red);
+        border-color: rgba(255, 82, 82, 0.2);
+      }
+      .btn.danger:hover {
+        background: var(--red-bg);
       }
 
       /* Status */
@@ -319,8 +328,8 @@
         color: #fff;
       }
       .options-menu a i { width: 16px; text-align: center; }
-      .options-menu a.delete { color: #ff7b7b; }
-      .options-menu a.delete:hover { background: rgba(255, 82, 82, 0.1); }
+      .options-menu a.delete { color: var(--red); }
+      .options-menu a.delete:hover { background: var(--red-bg); }
 
 
       /* Right panel */
@@ -332,18 +341,35 @@
         gap: 12px;
         position: relative;
       }
-      .terminal-card {
-        flex: 1;
-        background: linear-gradient(180deg, rgba(8,8,10,0.9), rgba(14,14,16,0.95));
-        border-radius: 14px;
-        padding: 12px;
-        border: 1px solid rgba(255,255,255,0.03);
-        box-shadow: 0 20px 60px rgba(2,6,23,0.6);
+      .view-container {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          min-height: 0;
+          overflow: hidden;
+          background: linear-gradient(180deg, rgba(8,8,10,0.9), rgba(14,14,16,0.95));
+          border-radius: 14px;
+          border: 1px solid rgba(255,255,255,0.03);
+          box-shadow: 0 20px 60px rgba(2,6,23,0.6);
+          animation: animate__animated animate__zoomIn;
+      }
+      
+      .view-header {
         display: flex;
-        flex-direction: column;
-        min-height: 0;
-        overflow: hidden;
-        animation: animate__animated animate__zoomIn;
+        align-items: center;
+        gap: 12px;
+        padding: 12px;
+        border-bottom: 1px solid var(--border);
+        flex-shrink: 0;
+      }
+      .view-title {
+        font-weight: 600;
+        color: #dff8ef;
+      }
+      
+      /* Terminal View */
+      #terminal-view {
+          padding: 12px;
       }
       .terminal-top {
         display: flex;
@@ -370,7 +396,6 @@
       .dot.min   { background: linear-gradient(180deg,#ffd27a,#ffb84d) }
       .dot.max   { background: linear-gradient(180deg,#7ef3b2,#2ad58a) }
 
-      /* Xterm area */
       #terminal {
         flex: 1;
         margin-top: 8px;
@@ -378,6 +403,86 @@
         overflow: hidden;
         border: 1px solid rgba(255,255,255,0.02);
         background: transparent !important;
+      }
+      
+      /* Uptime Monitor View */
+      #uptime-view-content {
+        flex-grow: 1;
+        overflow-y: auto;
+        padding: 20px;
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 20px;
+        align-content: flex-start;
+      }
+      .uptime-card {
+        background: var(--glass);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        transition: all 180ms ease;
+      }
+      .uptime-card:hover {
+        transform: translateY(-4px);
+        border-color: rgba(255,255,255,0.08);
+      }
+      .uptime-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .uptime-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        font-weight: 600;
+        padding: 4px 10px;
+        border-radius: 99px;
+      }
+      .uptime-status.up { color: var(--accent); background-color: rgba(0,208,132,0.1); }
+      .uptime-status.down { color: var(--red); background-color: var(--red-bg); }
+      .uptime-status.pending { color: var(--muted); background-color: rgba(139,143,146,0.1); }
+      .uptime-title { font-weight: 600; }
+      .uptime-url { font-size: 12px; color: var(--muted); word-break: break-all; }
+      .uptime-meta { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+      .empty-uptime {
+        grid-column: 1 / -1;
+        text-align: center;
+        padding: 40px;
+        color: var(--muted);
+      }
+      .empty-uptime i { font-size: 32px; margin-bottom: 12px; }
+
+      /* Browser View */
+      #browser-view-content {
+        flex-grow: 1;
+        display: flex;
+        flex-direction: column;
+        padding: 0;
+      }
+      .browser-nav {
+        display: flex;
+        gap: 8px;
+        padding: 12px;
+        border-bottom: 1px solid var(--border);
+      }
+      #browser-url-input {
+        flex-grow: 1;
+        background: var(--glass);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 8px 12px;
+        color: #e6eef2;
+        font-size: 14px;
+      }
+      #browser-iframe {
+        flex-grow: 1;
+        border: none;
+        background-color: #fff;
       }
       
       /* Terminal Loader Overlay */
@@ -486,12 +591,14 @@
 
       /* Custom scrollbar */
       .tab-list::-webkit-scrollbar,
-      .left-panel::-webkit-scrollbar {
+      .left-panel::-webkit-scrollbar,
+      #uptime-view-content::-webkit-scrollbar {
         width: 8px;
         height: 8px;
       }
       .tab-list::-webkit-scrollbar-thumb,
-      .left-panel::-webkit-scrollbar-thumb {
+      .left-panel::-webkit-scrollbar-thumb,
+      #uptime-view-content::-webkit-scrollbar-thumb {
         background: rgba(255,255,255,0.04);
         border-radius: 999px;
       }
@@ -515,7 +622,7 @@
             <div class="main">Server Command Center</div>
             <div class="sub">
               <i class="fas fa-cogs"></i>
-              <span>Multi-Terminal Management</span>
+              <span>Multi-Service Management</span>
             </div>
           </div>
         </div>
@@ -538,7 +645,7 @@
       <div class="workspace">
         <aside class="left-panel" aria-label="Server List">
           <div class="tabs-header">
-            <div class="tabs-title">MANAGED SERVERS</div>
+            <div class="tabs-title">SERVICES & SERVERS</div>
             <button id="add-server-btn" class="btn" title="Add New Server">
                 <i class="fas fa-plus"></i>
             </button>
@@ -553,7 +660,9 @@
             <pre id="loader-ascii"></pre>
             <p id="loader-text"></p>
           </div>
-          <section class="terminal-card" aria-label="Terminal">
+          
+          <!-- View 1: Terminal -->
+          <section id="terminal-view" class="view-container" aria-label="Terminal">
             <div class="terminal-top">
               <div class="window-controls">
                 <div class="dot close"></div>
@@ -565,6 +674,34 @@
             </div>
             <div id="terminal"></div>
           </section>
+
+          <!-- View 2: Uptime Monitor -->
+          <section id="uptime-view" class="view-container" aria-label="Uptime Monitor" style="display: none;">
+            <div class="view-header">
+              <i class="fas fa-heartbeat icon-circle"></i>
+              <div class="view-title">Uptime Monitor</div>
+              <div style="margin-left: auto;">
+                <button id="add-uptime-site-btn" class="btn"><i class="fas fa-plus"></i> Add Site</button>
+              </div>
+            </div>
+            <div id="uptime-view-content">
+              <!-- Uptime cards will be dynamically populated here -->
+            </div>
+          </section>
+
+          <!-- View 3: Web Browser -->
+          <section id="browser-view" class="view-container" aria-label="Web Browser" style="display: none;">
+             <div id="browser-view-content">
+               <form id="browser-nav-form" class="browser-nav">
+                  <button type="button" id="browser-back-btn" class="btn ghost"><i class="fas fa-arrow-left"></i></button>
+                  <button type="button" id="browser-forward-btn" class="btn ghost"><i class="fas fa-arrow-right"></i></button>
+                  <button type="button" id="browser-reload-btn" class="btn ghost"><i class="fas fa-sync-alt"></i></button>
+                  <input type="text" id="browser-url-input" placeholder="https://example.com">
+               </form>
+               <iframe id="browser-iframe" src="about:blank"></iframe>
+             </div>
+          </section>
+
         </main>
       </div>
     </div>
@@ -594,6 +731,27 @@
           <div class="modal-actions">
             <button type="button" id="cancel-btn" class="btn ghost">Cancel</button>
             <button type="submit" class="btn">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    
+    <!-- Uptime Site Modal -->
+    <div id="uptime-modal-overlay" class="modal-overlay">
+      <div id="uptime-modal" class="modal-content animate__animated animate__fadeInUp">
+        <h3>Add Website to Monitor <i class="fas fa-plus-circle"></i></h3>
+        <form id="uptime-form">
+          <div class="form-group">
+            <label for="uptime-name">Display Name</label>
+            <input type="text" id="uptime-name" required placeholder="e.g., My Personal Blog">
+          </div>
+          <div class="form-group">
+            <label for="uptime-url">URL to Check</label>
+            <input type="url" id="uptime-url" required placeholder="https://example.com">
+          </div>
+          <div class="modal-actions">
+            <button type="button" id="uptime-cancel-btn" class="btn ghost">Cancel</button>
+            <button type="submit" class="btn">Add Site</button>
           </div>
         </form>
       </div>
