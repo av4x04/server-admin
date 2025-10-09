@@ -22,7 +22,7 @@ app.get('*', (req, res) => {
 // --- UPTIME MONITOR LOGIC (SERVER-SIDE) ---
 
 const HARDCODED_UPTIME_SITES = [
-    { uid: 'hc_site_0', name: 'Server Admin', url: 'https://server-admin-v1-fp0s.onrender.com/', isHardcoded: true },
+    { uid: 'hc_site_0', name: 'Server Admin', url: 'https://server-admin-v1-fp0s.onrender.com', isHardcoded: true },
     { uid: 'hc_site_1', name: 'Server Terminal v1', url: 'https://server-terminal-v1-rvg9.onrender.com', isHardcoded: true },
     { uid: 'hc_site_2', name: 'Server Terminal v2', url: 'https://server-terminal-v2-lil8.onrender.com', isHardcoded: true },
     { uid: 'hc_site_3', name: 'Server Terminal v3', url: 'https://server-terminal-v3-eqdx.onrender.com', isHardcoded: true },
