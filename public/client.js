@@ -72,7 +72,6 @@ const loaderText = document.getElementById('loader-text');
 const allViews = document.querySelectorAll('.view-container');
 const terminalView = document.getElementById('terminal-view');
 const uptimeView = document.getElementById('uptime-view');
-const browserView = document.getElementById('browser-view');
 
 
 /**
@@ -194,9 +193,6 @@ function selectServer(service) {
             switchToView('uptime-view');
             statusText.textContent = 'Uptime Monitor';
             initializeUptimeMonitor();
-        } else if (service.uid === 'internal-browser') {
-            switchToView('browser-view');
-            statusText.textContent = 'Web Browser';
         }
     } else {
         switchToView('terminal-view');
@@ -474,26 +470,6 @@ function deleteUptimeSite(uid) {
     adminSocket.emit('uptime:delete_site', uid);
 }
 
-
-// --- WEB BROWSER LOGIC ---
-const browserUrlInput = document.getElementById('browser-url-input');
-const browserIframe = document.getElementById('browser-iframe');
-
-function initializeBrowser() {
-    document.getElementById('browser-nav-form').addEventListener('submit', e => {
-        e.preventDefault();
-        let url = browserUrlInput.value.trim();
-        if (url && !url.startsWith('http://') && !url.startsWith('https://')) {
-            url = 'https://' + url;
-        }
-        browserIframe.src = url || 'about:blank';
-    });
-    document.getElementById('browser-back-btn').addEventListener('click', () => browserIframe.contentWindow.history.back());
-    document.getElementById('browser-forward-btn').addEventListener('click', () => browserIframe.contentWindow.history.forward());
-    document.getElementById('browser-reload-btn').addEventListener('click', () => browserIframe.contentWindow.location.reload());
-}
-
-
 // --- GLOBAL INITIALIZATION ---
 function toggleFullscreen() {
     if (!document.fullscreenElement) document.documentElement.requestFullscreen();
@@ -557,8 +533,6 @@ function initializeDashboard() {
   document.getElementById('add-uptime-site-btn').addEventListener('click', showUptimeModal);
   document.getElementById('uptime-cancel-btn').addEventListener('click', hideUptimeModal);
   uptimeForm.addEventListener('submit', handleUptimeFormSubmit);
-  
-  initializeBrowser();
 
   document.addEventListener('click', (e) => {
     if (!e.target.closest('.options-btn') && !e.target.closest('.options-menu')) {
