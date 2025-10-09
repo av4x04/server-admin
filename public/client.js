@@ -21,7 +21,6 @@ term.open(document.getElementById('terminal'));
 
 const ICONS = ['fas fa-server', 'fas fa-database', 'fas fa-network-wired', 'fas fa-laptop-code'];
 const SERVER_STORAGE_KEY = 'admin-servers-list';
-const UPTIME_STORAGE_KEY = 'admin-uptime-sites';
 
 // Define local/internal services
 const LOCAL_SERVICES = [
@@ -54,12 +53,11 @@ const HARDCODED_SERVERS = [
     }
 ];
 
+let adminSocket; // Socket for admin panel features like Uptime
 let currentSocket = null;
 let activeServerUid = null;
 let allServices = []; // Combined list of local services and remote servers
 let userServers = [];
-let uptimeSites = [];
-let uptimeCheckInterval = null;
 const resettingServers = {}; // State to track resetting servers: { [uid]: endTime }
 
 // UI Elements
@@ -340,77 +338,101 @@ function handleFormSubmit(event) {
     hideModal();
 }
 
-// --- UPTIME MONITOR LOGIC ---
+// --- UPTIME MONITOR LOGIC (CLIENT-SIDE) ---
 const uptimeModalOverlay = document.getElementById('uptime-modal-overlay');
 const uptimeForm = document.getElementById('uptime-form');
+const uptimeViewContent = document.getElementById('uptime-view-content');
 
+/**
+ * Called when the Uptime Monitor view is opened.
+ * Subscribes to server-side events.
+ */
 function initializeUptimeMonitor() {
-    loadUptimeSites();
-    renderUptimeList();
-    if (!uptimeCheckInterval) {
-        checkAllUptimeSites(); // Initial check
-        uptimeCheckInterval = setInterval(checkAllUptimeSites, 60000); // Check every 60 seconds
+    if (adminSocket && adminSocket.connected) {
+        uptimeViewContent.innerHTML = `<div class="empty-uptime"><i class="fas fa-spinner fa-spin"></i><p>Đang tải dữ liệu từ server...</p></div>`;
+        adminSocket.emit('uptime:subscribe');
+    } else {
+        uptimeViewContent.innerHTML = `<div class="empty-uptime"><i class="fas fa-exclamation-triangle"></i><p>Không thể kết nối tới server admin.<br>Vui lòng làm mới trang.</p></div>`;
     }
 }
 
-function loadUptimeSites() {
-    const storedSites = localStorage.getItem(UPTIME_STORAGE_KEY);
-    uptimeSites = storedSites ? JSON.parse(storedSites) : [];
-}
-
-function saveUptimeSites() {
-    localStorage.setItem(UPTIME_STORAGE_KEY, JSON.stringify(uptimeSites));
-}
-
-function renderUptimeList() {
-    const container = document.getElementById('uptime-view-content');
-    container.innerHTML = '';
-    if (uptimeSites.length === 0) {
-        container.innerHTML = `<div class="empty-uptime"><i class="fas fa-satellite-dish"></i><p>Chưa có website nào được theo dõi.<br>Hãy thêm một trang để bắt đầu giám sát.</p></div>`;
+/**
+ * Renders the entire list of uptime sites from server data.
+ * @param {object} state - The full state object from the server { sites, statuses }.
+ */
+function renderUptimeList(state) {
+    uptimeViewContent.innerHTML = '';
+    if (!state.sites || state.sites.length === 0) {
+        uptimeViewContent.innerHTML = `<div class="empty-uptime"><i class="fas fa-satellite-dish"></i><p>Chưa có website nào được theo dõi.<br>Hãy thêm một trang để bắt đầu giám sát.</p></div>`;
         return;
     }
-    uptimeSites.forEach(site => {
-        const card = document.createElement('div');
-        card.className = 'uptime-card';
-        card.dataset.uid = site.uid;
-        card.innerHTML = `
-            <div class="uptime-header">
-                <div class="uptime-title">${site.name}</div>
-                <div class="uptime-status pending">Checking...</div>
-            </div>
-            <div class="uptime-url">${site.url}</div>
-            <div class="uptime-meta">
-                <span>Response: <span class="uptime-response">- ms</span></span>
-                <button class="btn ghost danger uptime-delete-btn" style="padding: 4px 8px; font-size: 12px;">Delete</button>
-            </div>
-        `;
-        card.querySelector('.uptime-delete-btn').addEventListener('click', () => deleteUptimeSite(site.uid));
-        container.appendChild(card);
+    state.sites.forEach(site => {
+        const card = createUptimeCard(site);
+        uptimeViewContent.appendChild(card);
+        if (state.statuses[site.uid]) {
+            updateUptimeCard(site.uid, state.statuses[site.uid]);
+        }
     });
 }
 
-async function checkSiteStatus(site) {
-    const card = document.querySelector(`.uptime-card[data-uid="${site.uid}"]`);
+/**
+ * Creates an HTML element for a single uptime site card.
+ * @param {object} site - The site data { uid, name, url }.
+ * @returns {HTMLElement} The card element.
+ */
+function createUptimeCard(site) {
+    const card = document.createElement('div');
+    card.className = 'uptime-card';
+    card.dataset.uid = site.uid;
+    card.innerHTML = `
+        <div class="uptime-header">
+            <div class="uptime-title">${site.name}</div>
+            <div class="uptime-status pending">Pending...</div>
+        </div>
+        <div class="uptime-url">${site.url}</div>
+        <div class="uptime-meta">
+            <span>Response: <span class="uptime-response">- ms</span></span>
+            <button class="btn ghost danger uptime-delete-btn" style="padding: 4px 8px; font-size: 12px;">Delete</button>
+        </div>
+    `;
+    card.querySelector('.uptime-delete-btn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        deleteUptimeSite(site.uid);
+    });
+    return card;
+}
+
+/**
+ * Updates an existing uptime card with new status information.
+ * @param {string} uid - The unique ID of the site.
+ * @param {object} statusData - The new status { status, responseTime }.
+ */
+function updateUptimeCard(uid, statusData) {
+    const card = document.querySelector(`.uptime-card[data-uid="${uid}"]`);
     if (!card) return;
+
     const statusEl = card.querySelector('.uptime-status');
     const responseEl = card.querySelector('.uptime-response');
 
-    const startTime = Date.now();
-    try {
-        const response = await fetch(site.url, { mode: 'no-cors', cache: 'no-store' });
-        const endTime = Date.now();
-        statusEl.className = 'uptime-status up';
-        statusEl.textContent = 'Up';
-        responseEl.textContent = `${endTime - startTime} ms`;
-    } catch (error) {
-        statusEl.className = 'uptime-status down';
-        statusEl.textContent = 'Down';
-        responseEl.textContent = 'N/A';
+    statusEl.classList.remove('up', 'down', 'pending');
+    
+    switch(statusData.status) {
+        case 'up':
+            statusEl.classList.add('up');
+            statusEl.textContent = 'Up';
+            responseEl.textContent = `${statusData.responseTime} ms`;
+            break;
+        case 'down':
+            statusEl.classList.add('down');
+            statusEl.textContent = 'Down';
+            responseEl.textContent = 'N/A';
+            break;
+        default:
+            statusEl.classList.add('pending');
+            statusEl.textContent = 'Checking...';
+            responseEl.textContent = '- ms';
+            break;
     }
-}
-
-function checkAllUptimeSites() {
-    uptimeSites.forEach(checkSiteStatus);
 }
 
 function showUptimeModal() {
@@ -422,26 +444,27 @@ function hideUptimeModal() {
     uptimeModalOverlay.classList.remove('show');
 }
 
+/**
+ * Handles the submission of the "Add Site" form.
+ * Emits an event to the server.
+ */
 function handleUptimeFormSubmit(e) {
     e.preventDefault();
-    const newSite = {
-        uid: 'uptime_' + Date.now(),
+    const siteData = {
         name: document.getElementById('uptime-name').value,
         url: document.getElementById('uptime-url').value,
     };
-    uptimeSites.push(newSite);
-    saveUptimeSites();
-    renderUptimeList();
-    checkSiteStatus(newSite); // Check immediately
+    adminSocket.emit('uptime:add_site', siteData);
     hideUptimeModal();
 }
 
+/**
+ * Handles the deletion of an uptime site.
+ * Emits an event to the server.
+ */
 function deleteUptimeSite(uid) {
     if (!confirm('Bạn có chắc muốn ngừng theo dõi website này?')) return;
-    uptimeSites = uptimeSites.filter(s => s.uid !== uid);
-    saveUptimeSites();
-    renderUptimeList();
-    checkAllUptimeSites(); // Re-render and re-check
+    adminSocket.emit('uptime:delete_site', uid);
 }
 
 
@@ -453,10 +476,10 @@ function initializeBrowser() {
     document.getElementById('browser-nav-form').addEventListener('submit', e => {
         e.preventDefault();
         let url = browserUrlInput.value.trim();
-        if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        if (url && !url.startsWith('http://') && !url.startsWith('https://')) {
             url = 'https://' + url;
         }
-        browserIframe.src = url;
+        browserIframe.src = url || 'about:blank';
     });
     document.getElementById('browser-back-btn').addEventListener('click', () => browserIframe.contentWindow.history.back());
     document.getElementById('browser-forward-btn').addEventListener('click', () => browserIframe.contentWindow.history.forward());
@@ -471,9 +494,41 @@ function toggleFullscreen() {
 }
 
 function initializeDashboard() {
-  const keepAliveSocket = io();
-  keepAliveSocket.on('connect', () => console.log('✅ Keep-alive connection established.'));
-  keepAliveSocket.on('disconnect', () => console.warn('⚠️ Keep-alive connection lost.'));
+  adminSocket = io();
+  adminSocket.on('connect', () => {
+    console.log('✅ Admin socket connected.');
+    if (activeServerUid === 'internal-uptime') {
+        initializeUptimeMonitor();
+    }
+  });
+  adminSocket.on('disconnect', () => console.warn('⚠️ Admin socket lost connection.'));
+
+  // --- Listen for Uptime events from server ---
+  adminSocket.on('uptime:full_list', (state) => {
+      console.log('Received full uptime list from server:', state);
+      renderUptimeList(state);
+  });
+  
+  adminSocket.on('uptime:site_added', (newSite) => {
+      console.log('Server added new site:', newSite);
+      const emptyState = uptimeViewContent.querySelector('.empty-uptime');
+      if (emptyState) emptyState.remove();
+      const card = createUptimeCard(newSite);
+      uptimeViewContent.appendChild(card);
+  });
+  
+  adminSocket.on('uptime:site_removed', (uid) => {
+      console.log('Server removed site:', uid);
+      const card = document.querySelector(`.uptime-card[data-uid="${uid}"]`);
+      if (card) card.remove();
+      if (uptimeViewContent.childElementCount === 0) {
+          renderUptimeList({ sites: [], statuses: {} });
+      }
+  });
+  
+  adminSocket.on('uptime:update', (updateData) => {
+      updateUptimeCard(updateData.uid, updateData);
+  });
   
   loadServers();
   renderServerList();
