@@ -36,30 +36,11 @@ term.open(document.getElementById('terminal'));
 const ICONS = ['fas fa-server', 'fas fa-database', 'fas fa-network-wired', 'fas fa-laptop-code'];
 const STORAGE_KEY = 'admin-servers-list';
 
-// Define hardcoded servers that cannot be deleted
-const HARDCODED_SERVERS = [
-    {
-        uid: 'hardcoded-1',
-        name: 'Terminal-v1',
-        url: 'https://server-terminal-v1-rvg9.onrender.com',
-        description: 'Server-Terminal 🚀',
-        deployHookUrl: '',
-        isHardcoded: true
-    },
-    {
-        uid: 'hardcoded-2',
-        name: 'Terminal-v2',
-        url: 'https://server-terminal-v2-lil8.onrender.com',
-        description: 'Server-Terminal 🚀',
-        deployHookUrl: '',
-        isHardcoded: true
-    }
-];
-
 let currentSocket = null;
 let activeServerUrl = null;
 let servers = [];
 let connectionAnimationInterval = null;
+let adminSocket = null; // Socket for keep-alive connection to admin server
 
 // UI Elements
 const statusText = document.getElementById('status-text');
@@ -71,30 +52,41 @@ const terminalLoader = document.getElementById('terminal-loader');
 const loaderAscii = document.getElementById('loader-ascii');
 const loaderText = document.getElementById('loader-text');
 
+const DEFAULT_SERVERS = [
+    {
+        uid: 'default-1',
+        name: 'Server A - Main Project',
+        url: 'https://server-v1-c2nb.onrender.com/',
+        description: 'Main production server',
+        deployHookUrl: 'https://api.render.com/deploy/srv-d3j0h7je5dus739f2cc0?key=75kshW-Qsbk'
+    },
+    {
+        uid: 'default-2',
+        name: 'Server B - Staging',
+        url: 'https://your-second-server.onrender.com/',
+        description: 'Staging environment',
+        deployHookUrl: ''
+    },
+];
+
 /**
- * Loads hardcoded servers and any user-added servers from localStorage.
+ * Loads servers from localStorage or uses defaults.
  */
 function loadServers() {
-    const storedUserServers = localStorage.getItem(STORAGE_KEY);
-    let userServers = [];
-    try {
-      if (storedUserServers) {
-          userServers = JSON.parse(storedUserServers);
-      }
-    } catch (e) {
-      console.error("Error parsing user servers from localStorage", e);
-      localStorage.removeItem(STORAGE_KEY); // Clear corrupted data
+    const storedServers = localStorage.getItem(STORAGE_KEY);
+    if (storedServers) {
+        servers = JSON.parse(storedServers);
+    } else {
+        servers = DEFAULT_SERVERS;
+        saveServers();
     }
-    // The final list is always the hardcoded ones plus the user's custom ones
-    servers = [...HARDCODED_SERVERS, ...userServers];
 }
 
 /**
- * Saves only the user-added (non-hardcoded) servers to localStorage.
+ * Saves the current server list to localStorage.
  */
 function saveServers() {
-    const userServers = servers.filter(s => !s.isHardcoded);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(userServers));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(servers));
 }
 
 /**
@@ -113,8 +105,12 @@ function renderServerList() {
         serverElement.setAttribute('role', 'listitem');
         serverElement.dataset.uid = server.uid;
 
-        // Do not show the options menu for hardcoded servers
-        const actionsHtml = !server.isHardcoded ? `
+        serverElement.innerHTML = `
+            <div class="icon-circle"><i class="${iconClass}"></i></div>
+            <div class="tab-meta">
+                <div class="tab-name">${server.name}</div>
+                <div class="tab-sub">${server.description || server.url}</div>
+            </div>
             <div class="tab-actions">
                 <button class="options-btn" title="Options"><i class="fas fa-ellipsis-v"></i></button>
                 <div class="options-menu">
@@ -122,15 +118,6 @@ function renderServerList() {
                     <a href="#" class="delete-btn delete"><i class="fas fa-trash-alt"></i> Delete</a>
                 </div>
             </div>
-        ` : '';
-
-        serverElement.innerHTML = `
-            <div class="icon-circle"><i class="${iconClass}"></i></div>
-            <div class="tab-meta">
-                <div class="tab-name">${server.name}</div>
-                <div class="tab-sub">${server.description || server.url}</div>
-            </div>
-            ${actionsHtml}
         `;
 
         // Event listener for selecting the server
@@ -140,34 +127,32 @@ function renderServerList() {
             }
         });
 
-        // Add event listeners for the options menu only for non-hardcoded servers
-        if (!server.isHardcoded) {
-            const optionsBtn = serverElement.querySelector('.options-btn');
-            const optionsMenu = serverElement.querySelector('.options-menu');
-            const rebootBtn = serverElement.querySelector('.reboot-btn');
-            const deleteBtn = serverElement.querySelector('.delete-btn');
+        // Event listeners for the options menu
+        const optionsBtn = serverElement.querySelector('.options-btn');
+        const optionsMenu = serverElement.querySelector('.options-menu');
+        const rebootBtn = serverElement.querySelector('.reboot-btn');
+        const deleteBtn = serverElement.querySelector('.delete-btn');
 
-            optionsBtn.addEventListener('click', e => {
-                e.stopPropagation();
-                const isVisible = optionsMenu.classList.contains('show');
-                document.querySelectorAll('.options-menu').forEach(m => m.classList.remove('show'));
-                if (!isVisible) {
-                  optionsMenu.classList.add('show');
-                }
-            });
+        optionsBtn.addEventListener('click', e => {
+            e.stopPropagation();
+            const isVisible = optionsMenu.classList.contains('show');
+            document.querySelectorAll('.options-menu').forEach(m => m.classList.remove('show'));
+            if (!isVisible) {
+              optionsMenu.classList.add('show');
+            }
+        });
 
-            rebootBtn.addEventListener('click', e => {
-                e.stopPropagation();
-                optionsMenu.classList.remove('show');
-                handleReboot(server);
-            });
+        rebootBtn.addEventListener('click', e => {
+            e.stopPropagation();
+            optionsMenu.classList.remove('show');
+            handleReboot(server);
+        });
 
-            deleteBtn.addEventListener('click', e => {
-                e.stopPropagation();
-                optionsMenu.classList.remove('show');
-                handleDelete(server);
-            });
-        }
+        deleteBtn.addEventListener('click', e => {
+            e.stopPropagation();
+            optionsMenu.classList.remove('show');
+            handleDelete(server);
+        });
 
         serverListContainer.appendChild(serverElement);
     });
@@ -250,39 +235,36 @@ function connectToServer(server) {
 }
 
 async function handleReboot(server) {
+    // Bước 1: Kiểm tra xem URL deploy hook đã được cấu hình ở phía client chưa.
     if (!server.deployHookUrl) {
-        term.write(`\r\n\x1b[31m[Error] Server '${server.name}' does not have a Deploy Hook URL configured.\x1b[0m\r\n`);
-        term.write(`\r\n\x1b[33mPlease edit the server information to add a deploy hook.\x1b[0m\r\n`);
+        term.write(`\r\n\x1b[31m[Lỗi] Server '${server.name}' chưa được cấu hình Deploy Hook URL.\x1b[0m\r\n`);
+        term.write(`\r\n\x1b[33mVui lòng chỉnh sửa thông tin server để thêm deploy hook.\x1b[0m\r\n`);
         return;
     }
 
-    term.write(`\r\n\x1b[33m[Reboot] Sending reboot command to '${server.name}'...\x1b[0m\r\n`);
+    term.write(`\r\n\x1b[33m[Reboot] Đang gửi lệnh reboot đến '${server.name}'...\x1b[0m\r\n`);
     
+    // Bước 2: Gọi trực tiếp webhook từ client.
     try {
-        // We use 'no-cors' mode because many webhooks don't return the necessary CORS headers
-        // for the browser to read the response. This command will send the request
-        // without a CORS preflight, but we cannot inspect the response.
-        // For a "fire and forget" reboot trigger, this is sufficient.
+        // Chúng ta sử dụng chế độ 'no-cors' vì nhiều webhook không trả về các header CORS
+        // cần thiết để trình duyệt đọc phản hồi. Lệnh này sẽ gửi yêu cầu đi
+        // mà không cần CORS preflight, nhưng chúng ta không thể kiểm tra phản hồi.
+        // Đối với một trigger reboot "bắn và quên", điều này là đủ.
         await fetch(server.deployHookUrl, { 
             method: 'POST',
             mode: 'no-cors'
         });
 
-        term.write(`\r\n\x1b[32m[Reboot] Reboot signal sent successfully. The server will restart shortly.\x1b[0m\r\n`);
+        term.write(`\r\n\x1b[32m[Reboot] Tín hiệu reboot đã được gửi thành công. Server sẽ sớm khởi động lại.\x1b[0m\r\n`);
         
     } catch (error) {
-        console.error('Error triggering deploy hook:', error);
-        term.write(`\r\n\x1b[31m[Reboot Error] Could not send reboot command: ${error.message}\x1b[0m\r\n`);
+        console.error('Lỗi khi kích hoạt deploy hook:', error);
+        term.write(`\r\n\x1b[31m[Lỗi Reboot] Không thể gửi lệnh reboot: ${error.message}\x1b[0m\r\n`);
     }
 }
 
 function handleDelete(serverToDelete) {
-    if (serverToDelete.isHardcoded) {
-        alert('Default servers cannot be deleted.');
-        return;
-    }
-
-    if (!confirm(`Are you sure you want to delete server '${serverToDelete.name}'? This action cannot be undone.`)) return;
+    if (!confirm(`Bạn có chắc muốn xóa server '${serverToDelete.name}' không? Hành động này không thể hoàn tác.`)) return;
 
     servers = servers.filter(s => s.uid !== serverToDelete.uid);
     saveServers();
@@ -298,7 +280,7 @@ function handleDelete(serverToDelete) {
             connectToServer(servers[0]);
         } else {
             statusText.textContent = 'No Server Selected';
-            term.write('No servers available. Please add a server to begin.');
+            term.write('Không có server nào. Vui lòng thêm một server để bắt đầu.');
         }
     }
     renderServerList();
@@ -310,8 +292,6 @@ function handleDelete(serverToDelete) {
  */
 function showModal() {
     serverForm.reset();
-    document.getElementById('server-id').value = '';
-    document.getElementById('modal-title').innerHTML = 'Add New Server <i class="fas fa-plus-circle"></i>';
     modalOverlay.classList.add('show');
 }
 
@@ -330,7 +310,6 @@ function handleFormSubmit(event) {
         url: document.getElementById('server-url').value,
         description: document.getElementById('server-description').value,
         deployHookUrl: document.getElementById('server-deploy-hook').value,
-        isHardcoded: false, // User-added servers are never hardcoded
     };
     servers.push(newServer);
     saveServers();
@@ -350,13 +329,32 @@ function toggleFullscreen() {
  * Main initialization function.
  */
 function initializeDashboard() {
+  // Connect to the admin server itself for keep-alive
+  try {
+    adminSocket = io({ transports: ['websocket'] }); // Connect to the server that served the page
+    
+    adminSocket.on('connect', () => {
+      console.log('✅ Connected to Admin server for keep-alive.');
+    });
+
+    adminSocket.on('disconnect', () => {
+      console.warn('⚠️ Disconnected from Admin server keep-alive connection.');
+    });
+
+    adminSocket.on('heartbeat', (data) => {
+        // This confirms the connection is active. No UI change needed.
+        console.log(`💓 Admin server heartbeat received: ${data.timestamp}`);
+    });
+  } catch (error) {
+      console.error('Could not establish keep-alive connection to admin server.', error);
+  }
+
   loadServers();
   renderServerList();
   
   if (servers.length > 0) {
     connectToServer(servers[0]);
   } else {
-      // This case should not happen anymore with hardcoded servers, but it's good practice to keep it.
       statusText.textContent = 'No Servers';
       terminalLoader.classList.remove('hidden');
       loaderAscii.textContent = '\n(>_<)\n\n';
@@ -386,5 +384,5 @@ function initializeDashboard() {
   });
 }
 
-// Initialize when the page is loaded
+// Khởi chạy khi trang được tải
 window.addEventListener('load', initializeDashboard);
