@@ -201,7 +201,7 @@ function showResettingOverlay(server, duration) {
     term.reset();
     terminalLoader.classList.remove('hidden');
     loaderAscii.textContent = '\n(>_<)\n\n';
-    loaderText.textContent = 'Server đang khởi động lại. Chờ 30 giây...';
+    loaderText.textContent = 'Server đang khởi động lại. Chờ 3 phút...';
     statusText.textContent = `Đang reset: ${server.name}`;
     terminalTitle.textContent = server.name;
 
@@ -306,7 +306,7 @@ async function handleReset(server) {
 
         term.write(`\r\n\x1b[32m[Reset] Tín hiệu reset đã được gửi. Server sẽ khởi động lại sau giây lát.\x1b[0m\r\n`);
         
-        const RESET_DURATION = 30000;
+        const RESET_DURATION = 180000; // 3 minutes
         resettingServers[server.uid] = Date.now() + RESET_DURATION;
 
         // If we are resetting the currently active server, show the overlay immediately
