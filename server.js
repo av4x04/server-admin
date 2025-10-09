@@ -24,7 +24,7 @@ app.get('*', (req, res) => {
 const HARDCODED_UPTIME_SITES = [
     { uid: 'hc_site_1', name: 'Server Terminal v1', url: 'https://server-terminal-v1-rvg9.onrender.com', isHardcoded: true },
     { uid: 'hc_site_2', name: 'Server Terminal v2', url: 'https://server-terminal-v2-lil8.onrender.com', isHardcoded: true },
-    { uid: 'hc_site_3', name: 'Server Terminal v3', url: 'https://server-terminal-v3-eqdx.onrender.com', isHardcoded: true },
+    { uid: 'hc_site_3', name: 'Google Search', url: 'https://google.com', isHardcoded: true },
 ];
 
 // In-memory state for uptime monitor
@@ -101,7 +101,12 @@ io.on('connection', (socket) => {
 
   // --- Uptime Event Handlers ---
   socket.on('uptime:subscribe', () => {
-      socket.emit('uptime:full_list', uptimeState);
+      // FIX: Create a clean object to send to the client, excluding non-serializable data.
+      const clientState = {
+        sites: uptimeState.sites,
+        statuses: uptimeState.statuses,
+      };
+      socket.emit('uptime:full_list', clientState);
   });
 
   socket.on('uptime:add_site', (siteData) => {
