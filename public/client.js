@@ -40,7 +40,6 @@ let currentSocket = null;
 let activeServerUrl = null;
 let servers = [];
 let connectionAnimationInterval = null;
-let adminSocket = null; // Socket for keep-alive connection to admin server
 
 // UI Elements
 const statusText = document.getElementById('status-text');
@@ -329,26 +328,6 @@ function toggleFullscreen() {
  * Main initialization function.
  */
 function initializeDashboard() {
-  // Connect to the admin server itself for keep-alive
-  try {
-    adminSocket = io({ transports: ['websocket'] }); // Connect to the server that served the page
-    
-    adminSocket.on('connect', () => {
-      console.log('✅ Connected to Admin server for keep-alive.');
-    });
-
-    adminSocket.on('disconnect', () => {
-      console.warn('⚠️ Disconnected from Admin server keep-alive connection.');
-    });
-
-    adminSocket.on('heartbeat', (data) => {
-        // This confirms the connection is active. No UI change needed.
-        console.log(`💓 Admin server heartbeat received: ${data.timestamp}`);
-    });
-  } catch (error) {
-      console.error('Could not establish keep-alive connection to admin server.', error);
-  }
-
   loadServers();
   renderServerList();
   
