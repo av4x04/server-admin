@@ -39,10 +39,16 @@ const HARDCODED_SERVERS = [
         uid: 'hardcoded-1', name: 'Terminal-v1', url: 'https://server-terminal-v1-rvg9.onrender.com',
         description: 'Server-Terminal 🚀', deployHookUrl: '', isHardcoded: true
     },
+    
     {
         uid: 'hardcoded-2', name: 'Terminal-v2', url: 'https://server-terminal-v2-lil8.onrender.com',
         description: 'Server-Terminal 🚀', deployHookUrl: 'https://api.render.com/deploy/srv-d3j6ugjipnbc73ekvm0g?key=EDEEiKz3oH8',
         isHardcoded: true
+    },
+
+    {
+        uid: 'hardcoded-1', name: 'Terminal-v3', url: 'https://server-terminal-v3-eqdx.onrender.com',
+        description: 'Server-Terminal 🚀', deployHookUrl: '', isHardcoded: true
     }
 ];
 
@@ -370,28 +376,36 @@ function renderUptimeList(state) {
 
 /**
  * Creates an HTML element for a single uptime site card.
- * @param {object} site - The site data { uid, name, url }.
+ * @param {object} site - The site data { uid, name, url, isHardcoded }.
  * @returns {HTMLElement} The card element.
  */
 function createUptimeCard(site) {
     const card = document.createElement('div');
     card.className = 'uptime-card';
     card.dataset.uid = site.uid;
+
+    const deleteButtonHtml = site.isHardcoded
+        ? '' // Don't render delete button for hardcoded sites
+        : `<button class="btn ghost danger uptime-delete-btn" style="padding: 4px 8px; font-size: 12px;">Delete</button>`;
+
     card.innerHTML = `
         <div class="uptime-header">
-            <div class="uptime-title">${site.name}</div>
+            <div class="uptime-title">${site.name} ${site.isHardcoded ? '<i class="fas fa-lock" style="font-size: 10px; color: var(--muted);"></i>' : ''}</div>
             <div class="uptime-status pending">Pending...</div>
         </div>
         <div class="uptime-url">${site.url}</div>
         <div class="uptime-meta">
             <span>Response: <span class="uptime-response">- ms</span></span>
-            <button class="btn ghost danger uptime-delete-btn" style="padding: 4px 8px; font-size: 12px;">Delete</button>
+            ${deleteButtonHtml}
         </div>
     `;
-    card.querySelector('.uptime-delete-btn').addEventListener('click', (e) => {
-        e.stopPropagation();
-        deleteUptimeSite(site.uid);
-    });
+
+    if (!site.isHardcoded) {
+        card.querySelector('.uptime-delete-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            deleteUptimeSite(site.uid);
+        });
+    }
     return card;
 }
 
