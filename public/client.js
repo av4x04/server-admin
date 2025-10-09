@@ -51,7 +51,7 @@ const HARDCODED_SERVERS = [
         name: 'Terminal-v2',
         url: 'https://server-terminal-v2-lil8.onrender.com',
         description: 'Server-Terminal 🚀',
-        deployHookUrl: '',
+        deployHookUrl: 'https://api.render.com/deploy/srv-d3j6ugjipnbc73ekvm0g?key=EDEEiKz3oH8', // Cần được cấu hình URL deploy hook riêng
         isHardcoded: true
     }
 ];
@@ -60,6 +60,7 @@ let currentSocket = null;
 let activeServerUrl = null;
 let servers = [];
 let connectionAnimationInterval = null;
+const resettingServers = {}; // State to track resetting servers: { [uid]: endTime }
 
 // UI Elements
 const statusText = document.getElementById('status-text');
@@ -113,16 +114,16 @@ function renderServerList() {
         serverElement.setAttribute('role', 'listitem');
         serverElement.dataset.uid = server.uid;
 
-        // Do not show the options menu for hardcoded servers
-        const actionsHtml = !server.isHardcoded ? `
+        // Do not show the options menu for hardcoded servers without a deploy hook for reset
+        const actionsHtml = `
             <div class="tab-actions">
-                <button class="options-btn" title="Options"><i class="fas fa-ellipsis-v"></i></button>
+                <button class="options-btn" title="Tùy chọn"><i class="fas fa-ellipsis-v"></i></button>
                 <div class="options-menu">
-                    <a href="#" class="reboot-btn"><i class="fas fa-sync-alt"></i> Reboot</a>
-                    <a href="#" class="delete-btn delete"><i class="fas fa-trash-alt"></i> Delete</a>
+                    <a href="#" class="reset-btn"><i class="fas fa-sync-alt"></i> Reset</a>
+                    ${!server.isHardcoded ? `<a href="#" class="delete-btn delete"><i class="fas fa-trash-alt"></i> Xóa</a>` : ''}
                 </div>
             </div>
-        ` : '';
+        `;
 
         serverElement.innerHTML = `
             <div class="icon-circle"><i class="${iconClass}"></i></div>
@@ -140,28 +141,27 @@ function renderServerList() {
             }
         });
 
-        // Add event listeners for the options menu only for non-hardcoded servers
-        if (!server.isHardcoded) {
-            const optionsBtn = serverElement.querySelector('.options-btn');
-            const optionsMenu = serverElement.querySelector('.options-menu');
-            const rebootBtn = serverElement.querySelector('.reboot-btn');
-            const deleteBtn = serverElement.querySelector('.delete-btn');
+        const optionsBtn = serverElement.querySelector('.options-btn');
+        const optionsMenu = serverElement.querySelector('.options-menu');
+        const resetBtn = serverElement.querySelector('.reset-btn');
+        const deleteBtn = serverElement.querySelector('.delete-btn');
 
-            optionsBtn.addEventListener('click', e => {
-                e.stopPropagation();
-                const isVisible = optionsMenu.classList.contains('show');
-                document.querySelectorAll('.options-menu').forEach(m => m.classList.remove('show'));
-                if (!isVisible) {
-                  optionsMenu.classList.add('show');
-                }
-            });
+        optionsBtn.addEventListener('click', e => {
+            e.stopPropagation();
+            const isVisible = optionsMenu.classList.contains('show');
+            document.querySelectorAll('.options-menu').forEach(m => m.classList.remove('show'));
+            if (!isVisible) {
+              optionsMenu.classList.add('show');
+            }
+        });
 
-            rebootBtn.addEventListener('click', e => {
-                e.stopPropagation();
-                optionsMenu.classList.remove('show');
-                handleReboot(server);
-            });
+        resetBtn.addEventListener('click', e => {
+            e.stopPropagation();
+            optionsMenu.classList.remove('show');
+            handleReset(server);
+        });
 
+        if (deleteBtn) {
             deleteBtn.addEventListener('click', e => {
                 e.stopPropagation();
                 optionsMenu.classList.remove('show');
@@ -184,9 +184,34 @@ function showConnectionAnimation(server) {
     }
     term.reset();
     terminalLoader.classList.remove('hidden');
-
     loaderAscii.textContent = '\n(>_<)\n\n';
-    loaderText.textContent = `Connecting to ${server.name}...`;
+    loaderText.textContent = `Đang kết nối đến ${server.name}...`;
+}
+
+/**
+ * Shows the overlay indicating the server is resetting.
+ * @param {object} server - The server that is resetting.
+ * @param {number} duration - The time in ms to show the overlay.
+ */
+function showResettingOverlay(server, duration) {
+    if (currentSocket && currentSocket.connected) {
+        currentSocket.disconnect();
+    }
+    currentSocket = null;
+    term.reset();
+    terminalLoader.classList.remove('hidden');
+    loaderAscii.textContent = '\n(>_<)\n\n';
+    loaderText.textContent = 'Server đang khởi động lại. Chờ 30 giây...';
+    statusText.textContent = `Đang reset: ${server.name}`;
+    terminalTitle.textContent = server.name;
+
+    // After the duration, attempt to reconnect IF the user is still on this server
+    setTimeout(() => {
+        delete resettingServers[server.uid];
+        if (activeServerUrl === server.url) {
+            connectToServer(server);
+        }
+    }, duration);
 }
 
 
@@ -195,12 +220,22 @@ function showConnectionAnimation(server) {
  * @param {object} server - The server object to connect to.
  */
 function connectToServer(server) {
-  if (activeServerUrl === server.url) return;
+  // Check if the server is in a reset cycle first
+  const resetEndTime = resettingServers[server.uid];
+  if (resetEndTime && Date.now() < resetEndTime) {
+      const remainingTime = resetEndTime - Date.now();
+      activeServerUrl = server.url;
+      renderServerList(); // Update UI to show this tab as active
+      showResettingOverlay(server, remainingTime);
+      return;
+  }
+
+  if (activeServerUrl === server.url && currentSocket && currentSocket.connected) return;
 
   if (currentSocket) currentSocket.disconnect();
 
   activeServerUrl = server.url;
-  statusText.textContent = `Connecting...`;
+  statusText.textContent = `Đang kết nối...`;
   terminalTitle.textContent = server.name;
 
   showConnectionAnimation(server);
@@ -214,8 +249,8 @@ function connectToServer(server) {
     connectionAnimationInterval = null;
     terminalLoader.classList.add('hidden');
     console.log(`🟢 Connected to server: ${server.url}`);
-    statusText.textContent = `Connected: ${server.name}`;
-    term.write(`\r\n\x1b[32m✅ Connection established to ${server.name}\x1b[0m\r\n`);
+    statusText.textContent = `Đã kết nối: ${server.name}`;
+    term.write(`\r\n\x1b[32m✅ Kết nối thành công đến ${server.name}\x1b[0m\r\n`);
   });
 
   currentSocket.on('disconnect', () => {
@@ -224,8 +259,8 @@ function connectToServer(server) {
     terminalLoader.classList.add('hidden');
     console.log(`🔴 Disconnected from server: ${server.url}`);
     if (activeServerUrl === server.url) {
-        statusText.textContent = 'Disconnected';
-        term.write('\r\n\x1b[31m⚠️ Connection lost. Attempting to reconnect...\x1b[0m\r\n');
+        statusText.textContent = 'Mất kết nối';
+        term.write('\r\n\x1b[31m⚠️ Mất kết nối. Đang thử kết nối lại...\x1b[0m\r\n');
     }
   });
   
@@ -249,40 +284,49 @@ function connectToServer(server) {
   });
 }
 
-async function handleReboot(server) {
+async function handleReset(server) {
     if (!server.deployHookUrl) {
-        term.write(`\r\n\x1b[31m[Error] Server '${server.name}' does not have a Deploy Hook URL configured.\x1b[0m\r\n`);
-        term.write(`\r\n\x1b[33mPlease edit the server information to add a deploy hook.\x1b[0m\r\n`);
+        term.write(`\r\n\x1b[31m[Lỗi] Server '${server.name}' chưa được cấu hình Deploy Hook URL.\x1b[0m\r\n`);
+        term.write(`\r\n\x1b[33mHãy chỉnh sửa thông tin server để thêm deploy hook.\x1b[0m\r\n`);
         return;
     }
+    
+    // Switch to this terminal view before showing messages
+    if (activeServerUrl !== server.url) {
+      connectToServer(server);
+    }
 
-    term.write(`\r\n\x1b[33m[Reboot] Sending reboot command to '${server.name}'...\x1b[0m\r\n`);
+    term.write(`\r\n\x1b[33m[Reset] Đang gửi lệnh reset đến '${server.name}'...\x1b[0m\r\n`);
     
     try {
-        // We use 'no-cors' mode because many webhooks don't return the necessary CORS headers
-        // for the browser to read the response. This command will send the request
-        // without a CORS preflight, but we cannot inspect the response.
-        // For a "fire and forget" reboot trigger, this is sufficient.
         await fetch(server.deployHookUrl, { 
             method: 'POST',
-            mode: 'no-cors'
+            mode: 'no-cors' // 'no-cors' is needed for deploy hooks from the browser
         });
 
-        term.write(`\r\n\x1b[32m[Reboot] Reboot signal sent successfully. The server will restart shortly.\x1b[0m\r\n`);
+        term.write(`\r\n\x1b[32m[Reset] Tín hiệu reset đã được gửi. Server sẽ khởi động lại sau giây lát.\x1b[0m\r\n`);
+        
+        const RESET_DURATION = 30000;
+        resettingServers[server.uid] = Date.now() + RESET_DURATION;
+
+        // If we are resetting the currently active server, show the overlay immediately
+        if (activeServerUrl === server.url) {
+            showResettingOverlay(server, RESET_DURATION);
+        }
         
     } catch (error) {
-        console.error('Error triggering deploy hook:', error);
-        term.write(`\r\n\x1b[31m[Reboot Error] Could not send reboot command: ${error.message}\x1b[0m\r\n`);
+        console.error('Lỗi khi kích hoạt deploy hook:', error);
+        term.write(`\r\n\x1b[31m[Lỗi Reset] Không thể gửi lệnh reset: ${error.message}\x1b[0m\r\n`);
     }
 }
 
 function handleDelete(serverToDelete) {
     if (serverToDelete.isHardcoded) {
-        alert('Default servers cannot be deleted.');
+        alert('Không thể xóa các server mặc định.');
         return;
     }
 
-    if (!confirm(`Are you sure you want to delete server '${serverToDelete.name}'? This action cannot be undone.`)) return;
+    if (!confirm(`Bạn có chắc muốn xóa server '${serverToDelete.name}'? Hành động này không thể hoàn tác.`)) return;
 
     servers = servers.filter(s => s.uid !== serverToDelete.uid);
     saveServers();
@@ -297,8 +341,8 @@ function handleDelete(serverToDelete) {
         if (servers.length > 0) {
             connectToServer(servers[0]);
         } else {
-            statusText.textContent = 'No Server Selected';
-            term.write('No servers available. Please add a server to begin.');
+            statusText.textContent = 'Chưa chọn Server';
+            term.write('Không có server nào. Vui lòng thêm server để bắt đầu.');
         }
     }
     renderServerList();
@@ -311,7 +355,7 @@ function handleDelete(serverToDelete) {
 function showModal() {
     serverForm.reset();
     document.getElementById('server-id').value = '';
-    document.getElementById('modal-title').innerHTML = 'Add New Server <i class="fas fa-plus-circle"></i>';
+    document.getElementById('modal-title').innerHTML = 'Thêm Server Mới <i class="fas fa-plus-circle"></i>';
     modalOverlay.classList.add('show');
 }
 
@@ -350,6 +394,20 @@ function toggleFullscreen() {
  * Main initialization function.
  */
 function initializeDashboard() {
+  // --- GIẢI PHÁP GIỮ SERVER-ADMIN "THỨC" ---
+  // Tạo một kết nối Socket.IO tới chính server-admin này.
+  // Kết nối này không làm gì cả ngoài việc tồn tại.
+  // Sự tồn tại của kết nối WebSocket liên tục (với ping/pong)
+  // sẽ báo cho nền tảng hosting rằng server đang hoạt động và không bị đưa vào trạng thái ngủ.
+  const keepAliveSocket = io();
+  keepAliveSocket.on('connect', () => {
+    console.log('✅ Keep-alive connection to admin server established to prevent idling.');
+  });
+  keepAliveSocket.on('disconnect', () => {
+    console.warn('⚠️ Keep-alive connection to admin server lost. It will auto-reconnect.');
+  });
+  // --- KẾT THÚC GIẢI PHÁP ---
+  
   loadServers();
   renderServerList();
   
@@ -360,7 +418,7 @@ function initializeDashboard() {
       statusText.textContent = 'No Servers';
       terminalLoader.classList.remove('hidden');
       loaderAscii.textContent = '\n(>_<)\n\n';
-      loaderText.textContent = 'No servers configured. Please add one to start.';
+      loaderText.textContent = 'Chưa có server nào được cấu hình. Hãy thêm một server để bắt đầu.';
   }
 
   // Event Listeners
