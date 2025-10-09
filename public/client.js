@@ -47,13 +47,13 @@ const HARDCODED_SERVERS = [
     },
 
     {
-        uid: 'hardcoded-1', name: 'Terminal-v3', url: 'https://server-terminal-v3-eqdx.onrender.com',
+        uid: 'hardcoded-3', name: 'Terminal-v3', url: 'https://server-terminal-v3-eqdx.onrender.com',
         description: 'Server-Terminal 🚀', deployHookUrl: 'https://api.render.com/deploy/srv-d3jqk995pdvs73elek5g?key=v7yihKTBnaE',
         isHardcoded: true
     },
 
     {
-        uid: 'hardcoded-1', name: 'Terminal-v4', url: 'https://server-terminal-v4.onrender.com',
+        uid: 'hardcoded-4', name: 'Terminal-v4', url: 'https://server-terminal-v4.onrender.com',
         description: 'Server-Terminal 🚀', deployHookUrl: 'https://api.render.com/deploy/srv-d3jt996uk2gs739e998g?key=N-8qwaYuFaU',
         isHardcoded: true
     }
