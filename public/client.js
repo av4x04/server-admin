@@ -30,13 +30,6 @@ const LOCAL_SERVICES = [
         description: 'Giám sát trạng thái website',
         isLocal: true,
         icon: 'fas fa-heartbeat'
-    },
-    {
-        uid: 'internal-browser',
-        name: 'Web Browser',
-        description: 'Trình duyệt web tích hợp',
-        isLocal: true,
-        icon: 'fas fa-globe'
     }
 ];
 
