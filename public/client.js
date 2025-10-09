@@ -6,314 +6,290 @@ const term = new Terminal({
     foreground: '#e6eef2',
     cursor: '#00d084',
     selection: 'rgba(0, 208, 132, 0.3)',
-    black: '#0b0b0c',
-    red: '#ff7b7b',
-    green: '#7ef3b2',
-    yellow: '#ffd27a',
-    blue: '#75d1ff',
-    magenta: '#c792ea',
-    cyan: '#89ddff',
-    white: '#e6eef2',
-    brightBlack: '#8b8f92',
-    brightRed: '#ff9e9e',
-    brightGreen: '#a1f8cd',
-    brightYellow: '#ffe5a8',
-    brightBlue: '#a4e1ff',
-    brightMagenta: '#e4b9ff',
-    brightCyan: '#b8edff',
-    brightWhite: '#ffffff',
+    black: '#0b0b0c', red: '#ff7b7b', green: '#7ef3b2', yellow: '#ffd27a',
+    blue: '#75d1ff', magenta: '#c792ea', cyan: '#89ddff', white: '#e6eef2',
+    brightBlack: '#8b8f92', brightRed: '#ff9e9e', brightGreen: '#a1f8cd',
+    brightYellow: '#ffe5a8', brightBlue: '#a4e1ff', brightMagenta: '#e4b9ff',
+    brightCyan: '#b8edff', brightWhite: '#ffffff',
   },
   fontSize: 14,
   fontFamily: 'Menlo, "DejaVu Sans Mono", Consolas, "Lucida Console", monospace',
-  cursorBlink: true,
-  cursorStyle: 'block',
-  allowTransparency: true,
-  windowsMode: false,
-  scrollback: 1000,
+  cursorBlink: true, cursorStyle: 'block', allowTransparency: true,
+  windowsMode: false, scrollback: 1000,
 });
 term.open(document.getElementById('terminal'));
 
 const ICONS = ['fas fa-server', 'fas fa-database', 'fas fa-network-wired', 'fas fa-laptop-code'];
-const STORAGE_KEY = 'admin-servers-list';
+const SERVER_STORAGE_KEY = 'admin-servers-list';
+const UPTIME_STORAGE_KEY = 'admin-uptime-sites';
+
+// Define local/internal services
+const LOCAL_SERVICES = [
+    {
+        uid: 'internal-uptime',
+        name: 'Uptime Monitor',
+        description: 'Giám sát trạng thái website',
+        isLocal: true,
+        icon: 'fas fa-heartbeat'
+    },
+    {
+        uid: 'internal-browser',
+        name: 'Web Browser',
+        description: 'Trình duyệt web tích hợp',
+        isLocal: true,
+        icon: 'fas fa-globe'
+    }
+];
 
 // Define hardcoded servers that cannot be deleted
 const HARDCODED_SERVERS = [
     {
-        uid: 'hardcoded-1',
-        name: 'Terminal-v1',
-        url: 'https://server-terminal-v1-rvg9.onrender.com',
-        description: 'Server-Terminal 🚀',
-        deployHookUrl: '',
-        isHardcoded: true
+        uid: 'hardcoded-1', name: 'Terminal-v1', url: 'https://server-terminal-v1-rvg9.onrender.com',
+        description: 'Server-Terminal 🚀', deployHookUrl: '', isHardcoded: true
     },
     {
-        uid: 'hardcoded-2',
-        name: 'Terminal-v2',
-        url: 'https://server-terminal-v2-lil8.onrender.com',
-        description: 'Server-Terminal 🚀',
-        deployHookUrl: 'https://api.render.com/deploy/srv-d3j6ugjipnbc73ekvm0g?key=EDEEiKz3oH8', // Cần được cấu hình URL deploy hook riêng
+        uid: 'hardcoded-2', name: 'Terminal-v2', url: 'https://server-terminal-v2-lil8.onrender.com',
+        description: 'Server-Terminal 🚀', deployHookUrl: 'https://api.render.com/deploy/srv-d3j6ugjipnbc73ekvm0g?key=EDEEiKz3oH8',
         isHardcoded: true
     }
 ];
 
 let currentSocket = null;
-let activeServerUrl = null;
-let servers = [];
-let connectionAnimationInterval = null;
+let activeServerUid = null;
+let allServices = []; // Combined list of local services and remote servers
+let userServers = [];
+let uptimeSites = [];
+let uptimeCheckInterval = null;
 const resettingServers = {}; // State to track resetting servers: { [uid]: endTime }
 
 // UI Elements
 const statusText = document.getElementById('status-text');
 const serverListContainer = document.getElementById('server-list');
-const terminalTitle = document.getElementById('terminal-title');
 const modalOverlay = document.getElementById('modal-overlay');
 const serverForm = document.getElementById('server-form');
 const terminalLoader = document.getElementById('terminal-loader');
 const loaderAscii = document.getElementById('loader-ascii');
 const loaderText = document.getElementById('loader-text');
 
+// Views
+const allViews = document.querySelectorAll('.view-container');
+const terminalView = document.getElementById('terminal-view');
+const uptimeView = document.getElementById('uptime-view');
+const browserView = document.getElementById('browser-view');
+
+
 /**
- * Loads hardcoded servers and any user-added servers from localStorage.
+ * Switches the main view in the right panel.
+ * @param {string} viewId The ID of the view to show.
+ */
+function switchToView(viewId) {
+    allViews.forEach(view => {
+        view.style.display = view.id === viewId ? 'flex' : 'none';
+    });
+}
+
+/**
+ * Loads user-defined servers from localStorage.
  */
 function loadServers() {
-    const storedUserServers = localStorage.getItem(STORAGE_KEY);
-    let userServers = [];
+    const storedUserServers = localStorage.getItem(SERVER_STORAGE_KEY);
     try {
-      if (storedUserServers) {
-          userServers = JSON.parse(storedUserServers);
-      }
+        userServers = storedUserServers ? JSON.parse(storedUserServers) : [];
     } catch (e) {
-      console.error("Error parsing user servers from localStorage", e);
-      localStorage.removeItem(STORAGE_KEY); // Clear corrupted data
+        console.error("Error parsing user servers from localStorage", e);
+        localStorage.removeItem(SERVER_STORAGE_KEY);
+        userServers = [];
     }
-    // The final list is always the hardcoded ones plus the user's custom ones
-    servers = [...HARDCODED_SERVERS, ...userServers];
+    allServices = [...LOCAL_SERVICES, ...HARDCODED_SERVERS, ...userServers];
 }
 
-/**
- * Saves only the user-added (non-hardcoded) servers to localStorage.
- */
 function saveServers() {
-    const userServers = servers.filter(s => !s.isHardcoded);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(userServers));
+    localStorage.setItem(SERVER_STORAGE_KEY, JSON.stringify(userServers));
 }
 
 /**
- * Renders the list of servers in the sidebar.
+ * Renders the combined list of services and servers in the sidebar.
  */
 function renderServerList() {
-    serverListContainer.innerHTML = ''; // Clear existing list
-    
-    servers.forEach((server, index) => {
-        const iconClass = ICONS[index % ICONS.length];
+    serverListContainer.innerHTML = '';
+    allServices.forEach((service, index) => {
+        const iconClass = service.icon || ICONS[index % ICONS.length];
         const serverElement = document.createElement('div');
         serverElement.className = 'tab-item';
-        if (server.url === activeServerUrl) {
+        if (service.uid === activeServerUid) {
             serverElement.classList.add('active');
         }
         serverElement.setAttribute('role', 'listitem');
-        serverElement.dataset.uid = server.uid;
+        serverElement.dataset.uid = service.uid;
 
-        // Do not show the options menu for hardcoded servers without a deploy hook for reset
-        const actionsHtml = `
+        let actionsHtml = '';
+        if (!service.isLocal) {
+            actionsHtml = `
             <div class="tab-actions">
                 <button class="options-btn" title="Tùy chọn"><i class="fas fa-ellipsis-v"></i></button>
                 <div class="options-menu">
                     <a href="#" class="reset-btn"><i class="fas fa-sync-alt"></i> Reset</a>
-                    ${!server.isHardcoded ? `<a href="#" class="delete-btn delete"><i class="fas fa-trash-alt"></i> Xóa</a>` : ''}
+                    ${!service.isHardcoded ? `<a href="#" class="delete-btn delete"><i class="fas fa-trash-alt"></i> Xóa</a>` : ''}
                 </div>
-            </div>
-        `;
-
+            </div>`;
+        }
+        
         serverElement.innerHTML = `
             <div class="icon-circle"><i class="${iconClass}"></i></div>
             <div class="tab-meta">
-                <div class="tab-name">${server.name}</div>
-                <div class="tab-sub">${server.description || server.url}</div>
+                <div class="tab-name">${service.name}</div>
+                <div class="tab-sub">${service.description || service.url}</div>
             </div>
             ${actionsHtml}
         `;
-
-        // Event listener for selecting the server
+        
         serverElement.addEventListener('click', (e) => {
             if (!e.target.closest('.tab-actions')) {
-                connectToServer(server);
+                selectServer(service);
             }
         });
 
-        const optionsBtn = serverElement.querySelector('.options-btn');
-        const optionsMenu = serverElement.querySelector('.options-menu');
-        const resetBtn = serverElement.querySelector('.reset-btn');
-        const deleteBtn = serverElement.querySelector('.delete-btn');
+        if (!service.isLocal) {
+            const optionsBtn = serverElement.querySelector('.options-btn');
+            const optionsMenu = serverElement.querySelector('.options-menu');
+            optionsBtn.addEventListener('click', e => {
+                e.stopPropagation();
+                document.querySelectorAll('.options-menu').forEach(m => m.classList.remove('show'));
+                optionsMenu.classList.add('show');
+            });
 
-        optionsBtn.addEventListener('click', e => {
-            e.stopPropagation();
-            const isVisible = optionsMenu.classList.contains('show');
-            document.querySelectorAll('.options-menu').forEach(m => m.classList.remove('show'));
-            if (!isVisible) {
-              optionsMenu.classList.add('show');
-            }
-        });
-
-        resetBtn.addEventListener('click', e => {
-            e.stopPropagation();
-            optionsMenu.classList.remove('show');
-            handleReset(server);
-        });
-
-        if (deleteBtn) {
-            deleteBtn.addEventListener('click', e => {
+            serverElement.querySelector('.reset-btn').addEventListener('click', e => {
                 e.stopPropagation();
                 optionsMenu.classList.remove('show');
-                handleDelete(server);
+                handleReset(service);
             });
-        }
 
+            if (!service.isHardcoded) {
+                serverElement.querySelector('.delete-btn').addEventListener('click', e => {
+                    e.stopPropagation();
+                    optionsMenu.classList.remove('show');
+                    handleDelete(service);
+                });
+            }
+        }
         serverListContainer.appendChild(serverElement);
     });
 }
 
 /**
- * Shows a connection message in the terminal overlay.
- * @param {object} server - The server object being connected to.
+ * Main handler for when a user selects an item from the left panel.
+ * @param {object} service The selected service or server object.
  */
-function showConnectionAnimation(server) {
-    if (connectionAnimationInterval) {
-        clearInterval(connectionAnimationInterval);
-        connectionAnimationInterval = null;
+function selectServer(service) {
+    if (activeServerUid === service.uid) return;
+
+    activeServerUid = service.uid;
+    if (currentSocket) {
+        currentSocket.disconnect();
+        currentSocket = null;
     }
+    
+    renderServerList(); // Update active highlight
+
+    if (service.isLocal) {
+        terminalLoader.classList.add('hidden'); // Hide terminal loader
+        if (service.uid === 'internal-uptime') {
+            switchToView('uptime-view');
+            statusText.textContent = 'Uptime Monitor';
+            initializeUptimeMonitor();
+        } else if (service.uid === 'internal-browser') {
+            switchToView('browser-view');
+            statusText.textContent = 'Web Browser';
+        }
+    } else {
+        switchToView('terminal-view');
+        connectToTerminalServer(service);
+    }
+}
+
+function showConnectionAnimation(server) {
     term.reset();
     terminalLoader.classList.remove('hidden');
     loaderAscii.textContent = '\n(>_<)\n\n';
     loaderText.textContent = `Đang kết nối đến ${server.name}...`;
 }
 
-/**
- * Shows the overlay indicating the server is resetting.
- * @param {object} server - The server that is resetting.
- * @param {number} duration - The time in ms to show the overlay.
- */
 function showResettingOverlay(server, duration) {
-    if (currentSocket && currentSocket.connected) {
-        currentSocket.disconnect();
-    }
+    if (currentSocket && currentSocket.connected) currentSocket.disconnect();
     currentSocket = null;
     term.reset();
+    switchToView('terminal-view');
     terminalLoader.classList.remove('hidden');
     loaderAscii.textContent = '\n(>_<)\n\n';
     loaderText.textContent = 'Server đang khởi động lại. Chờ 3 phút...';
     statusText.textContent = `Đang reset: ${server.name}`;
-    terminalTitle.textContent = server.name;
+    document.getElementById('terminal-title').textContent = server.name;
 
-    // After the duration, attempt to reconnect IF the user is still on this server
     setTimeout(() => {
         delete resettingServers[server.uid];
-        if (activeServerUrl === server.url) {
-            connectToServer(server);
+        if (activeServerUid === server.uid) {
+            selectServer(server);
         }
     }, duration);
 }
 
-
-/**
- * Establishes a Socket.IO connection to a specific server.
- * @param {object} server - The server object to connect to.
- */
-function connectToServer(server) {
-  // Check if the server is in a reset cycle first
+function connectToTerminalServer(server) {
   const resetEndTime = resettingServers[server.uid];
   if (resetEndTime && Date.now() < resetEndTime) {
-      const remainingTime = resetEndTime - Date.now();
-      activeServerUrl = server.url;
-      renderServerList(); // Update UI to show this tab as active
-      showResettingOverlay(server, remainingTime);
+      showResettingOverlay(server, resetEndTime - Date.now());
       return;
   }
-
-  if (activeServerUrl === server.url && currentSocket && currentSocket.connected) return;
-
-  if (currentSocket) currentSocket.disconnect();
-
-  activeServerUrl = server.url;
+  
   statusText.textContent = `Đang kết nối...`;
-  terminalTitle.textContent = server.name;
-
+  document.getElementById('terminal-title').textContent = server.name;
   showConnectionAnimation(server);
-
-  renderServerList(); // Re-render to update active state
 
   currentSocket = io(server.url, { transports: ['websocket'] });
 
   currentSocket.on('connect', () => {
-    if (connectionAnimationInterval) clearInterval(connectionAnimationInterval);
-    connectionAnimationInterval = null;
     terminalLoader.classList.add('hidden');
-    console.log(`🟢 Connected to server: ${server.url}`);
     statusText.textContent = `Đã kết nối: ${server.name}`;
     term.write(`\r\n\x1b[32m✅ Kết nối thành công đến ${server.name}\x1b[0m\r\n`);
   });
 
   currentSocket.on('disconnect', () => {
-    if (connectionAnimationInterval) clearInterval(connectionAnimationInterval);
-    connectionAnimationInterval = null;
     terminalLoader.classList.add('hidden');
-    console.log(`🔴 Disconnected from server: ${server.url}`);
-    if (activeServerUrl === server.url) {
+    if (activeServerUid === server.uid) {
         statusText.textContent = 'Mất kết nối';
         term.write('\r\n\x1b[31m⚠️ Mất kết nối. Đang thử kết nối lại...\x1b[0m\r\n');
     }
   });
   
   currentSocket.on('output', data => {
-      if(connectionAnimationInterval) { // Stop animation on first output
-        clearInterval(connectionAnimationInterval);
-        connectionAnimationInterval = null;
-        terminalLoader.classList.add('hidden');
-      }
+      terminalLoader.classList.add('hidden');
       term.write(data);
   });
 
   currentSocket.on('history', history => {
-    if(connectionAnimationInterval) {
-        clearInterval(connectionAnimationInterval);
-        connectionAnimationInterval = null;
-        terminalLoader.classList.add('hidden');
-        term.reset(); // Clear animation before writing history
-    }
+    terminalLoader.classList.add('hidden');
+    term.reset();
     term.write(history);
   });
 }
 
 async function handleReset(server) {
     if (!server.deployHookUrl) {
-        term.write(`\r\n\x1b[31m[Lỗi] Server '${server.name}' chưa được cấu hình Deploy Hook URL.\x1b[0m\r\n`);
-        term.write(`\r\n\x1b[33mHãy chỉnh sửa thông tin server để thêm deploy hook.\x1b[0m\r\n`);
+        alert(`Server '${server.name}' chưa được cấu hình Deploy Hook URL.`);
         return;
     }
     
-    // Switch to this terminal view before showing messages
-    if (activeServerUrl !== server.url) {
-      connectToServer(server);
-    }
+    if (activeServerUid !== server.uid) selectServer(server);
 
     term.write(`\r\n\x1b[33m[Reset] Đang gửi lệnh reset đến '${server.name}'...\x1b[0m\r\n`);
     
     try {
-        await fetch(server.deployHookUrl, { 
-            method: 'POST',
-            mode: 'no-cors' // 'no-cors' is needed for deploy hooks from the browser
-        });
-
-        term.write(`\r\n\x1b[32m[Reset] Tín hiệu reset đã được gửi. Server sẽ khởi động lại sau giây lát.\x1b[0m\r\n`);
-        
+        await fetch(server.deployHookUrl, { method: 'POST', mode: 'no-cors' });
+        term.write(`\r\n\x1b[32m[Reset] Tín hiệu reset đã được gửi. Server sẽ khởi động lại.\x1b[0m\r\n`);
         const RESET_DURATION = 180000; // 3 minutes
         resettingServers[server.uid] = Date.now() + RESET_DURATION;
-
-        // If we are resetting the currently active server, show the overlay immediately
-        if (activeServerUrl === server.url) {
+        if (activeServerUid === server.uid) {
             showResettingOverlay(server, RESET_DURATION);
         }
-        
     } catch (error) {
         console.error('Lỗi khi kích hoạt deploy hook:', error);
         term.write(`\r\n\x1b[31m[Lỗi Reset] Không thể gửi lệnh reset: ${error.message}\x1b[0m\r\n`);
@@ -321,37 +297,22 @@ async function handleReset(server) {
 }
 
 function handleDelete(serverToDelete) {
-    if (serverToDelete.isHardcoded) {
-        alert('Không thể xóa các server mặc định.');
-        return;
-    }
+    if (serverToDelete.isHardcoded || !confirm(`Bạn có chắc muốn xóa server '${serverToDelete.name}'?`)) return;
 
-    if (!confirm(`Bạn có chắc muốn xóa server '${serverToDelete.name}'? Hành động này không thể hoàn tác.`)) return;
-
-    servers = servers.filter(s => s.uid !== serverToDelete.uid);
+    userServers = userServers.filter(s => s.uid !== serverToDelete.uid);
     saveServers();
+    loadServers(); // Recalculate allServices
 
-    if (activeServerUrl === serverToDelete.url) {
+    if (activeServerUid === serverToDelete.uid) {
         if (currentSocket) currentSocket.disconnect();
         currentSocket = null;
-        activeServerUrl = null;
+        activeServerUid = null;
         term.reset();
-        terminalTitle.textContent = 'Terminal';
-        
-        if (servers.length > 0) {
-            connectToServer(servers[0]);
-        } else {
-            statusText.textContent = 'Chưa chọn Server';
-            term.write('Không có server nào. Vui lòng thêm server để bắt đầu.');
-        }
+        selectServer(allServices[0]); // Select the first available service
     }
     renderServerList();
 }
 
-
-/**
- * Shows the modal for adding a new server.
- */
 function showModal() {
     serverForm.reset();
     document.getElementById('server-id').value = '';
@@ -359,9 +320,6 @@ function showModal() {
     modalOverlay.classList.add('show');
 }
 
-/**
- * Hides the modal.
- */
 function hideModal() {
     modalOverlay.classList.remove('show');
 }
@@ -374,51 +332,159 @@ function handleFormSubmit(event) {
         url: document.getElementById('server-url').value,
         description: document.getElementById('server-description').value,
         deployHookUrl: document.getElementById('server-deploy-hook').value,
-        isHardcoded: false, // User-added servers are never hardcoded
     };
-    servers.push(newServer);
+    userServers.push(newServer);
     saveServers();
+    loadServers();
     renderServerList();
     hideModal();
 }
 
-function toggleFullscreen() {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen();
-    } else if (document.exitFullscreen) {
-      document.exitFullscreen();
+// --- UPTIME MONITOR LOGIC ---
+const uptimeModalOverlay = document.getElementById('uptime-modal-overlay');
+const uptimeForm = document.getElementById('uptime-form');
+
+function initializeUptimeMonitor() {
+    loadUptimeSites();
+    renderUptimeList();
+    if (!uptimeCheckInterval) {
+        checkAllUptimeSites(); // Initial check
+        uptimeCheckInterval = setInterval(checkAllUptimeSites, 60000); // Check every 60 seconds
     }
 }
 
-/**
- * Main initialization function.
- */
+function loadUptimeSites() {
+    const storedSites = localStorage.getItem(UPTIME_STORAGE_KEY);
+    uptimeSites = storedSites ? JSON.parse(storedSites) : [];
+}
+
+function saveUptimeSites() {
+    localStorage.setItem(UPTIME_STORAGE_KEY, JSON.stringify(uptimeSites));
+}
+
+function renderUptimeList() {
+    const container = document.getElementById('uptime-view-content');
+    container.innerHTML = '';
+    if (uptimeSites.length === 0) {
+        container.innerHTML = `<div class="empty-uptime"><i class="fas fa-satellite-dish"></i><p>Chưa có website nào được theo dõi.<br>Hãy thêm một trang để bắt đầu giám sát.</p></div>`;
+        return;
+    }
+    uptimeSites.forEach(site => {
+        const card = document.createElement('div');
+        card.className = 'uptime-card';
+        card.dataset.uid = site.uid;
+        card.innerHTML = `
+            <div class="uptime-header">
+                <div class="uptime-title">${site.name}</div>
+                <div class="uptime-status pending">Checking...</div>
+            </div>
+            <div class="uptime-url">${site.url}</div>
+            <div class="uptime-meta">
+                <span>Response: <span class="uptime-response">- ms</span></span>
+                <button class="btn ghost danger uptime-delete-btn" style="padding: 4px 8px; font-size: 12px;">Delete</button>
+            </div>
+        `;
+        card.querySelector('.uptime-delete-btn').addEventListener('click', () => deleteUptimeSite(site.uid));
+        container.appendChild(card);
+    });
+}
+
+async function checkSiteStatus(site) {
+    const card = document.querySelector(`.uptime-card[data-uid="${site.uid}"]`);
+    if (!card) return;
+    const statusEl = card.querySelector('.uptime-status');
+    const responseEl = card.querySelector('.uptime-response');
+
+    const startTime = Date.now();
+    try {
+        const response = await fetch(site.url, { mode: 'no-cors', cache: 'no-store' });
+        const endTime = Date.now();
+        statusEl.className = 'uptime-status up';
+        statusEl.textContent = 'Up';
+        responseEl.textContent = `${endTime - startTime} ms`;
+    } catch (error) {
+        statusEl.className = 'uptime-status down';
+        statusEl.textContent = 'Down';
+        responseEl.textContent = 'N/A';
+    }
+}
+
+function checkAllUptimeSites() {
+    uptimeSites.forEach(checkSiteStatus);
+}
+
+function showUptimeModal() {
+    uptimeForm.reset();
+    uptimeModalOverlay.classList.add('show');
+}
+
+function hideUptimeModal() {
+    uptimeModalOverlay.classList.remove('show');
+}
+
+function handleUptimeFormSubmit(e) {
+    e.preventDefault();
+    const newSite = {
+        uid: 'uptime_' + Date.now(),
+        name: document.getElementById('uptime-name').value,
+        url: document.getElementById('uptime-url').value,
+    };
+    uptimeSites.push(newSite);
+    saveUptimeSites();
+    renderUptimeList();
+    checkSiteStatus(newSite); // Check immediately
+    hideUptimeModal();
+}
+
+function deleteUptimeSite(uid) {
+    if (!confirm('Bạn có chắc muốn ngừng theo dõi website này?')) return;
+    uptimeSites = uptimeSites.filter(s => s.uid !== uid);
+    saveUptimeSites();
+    renderUptimeList();
+    checkAllUptimeSites(); // Re-render and re-check
+}
+
+
+// --- WEB BROWSER LOGIC ---
+const browserUrlInput = document.getElementById('browser-url-input');
+const browserIframe = document.getElementById('browser-iframe');
+
+function initializeBrowser() {
+    document.getElementById('browser-nav-form').addEventListener('submit', e => {
+        e.preventDefault();
+        let url = browserUrlInput.value.trim();
+        if (!url.startsWith('http://') && !url.startsWith('https://')) {
+            url = 'https://' + url;
+        }
+        browserIframe.src = url;
+    });
+    document.getElementById('browser-back-btn').addEventListener('click', () => browserIframe.contentWindow.history.back());
+    document.getElementById('browser-forward-btn').addEventListener('click', () => browserIframe.contentWindow.history.forward());
+    document.getElementById('browser-reload-btn').addEventListener('click', () => browserIframe.contentWindow.location.reload());
+}
+
+
+// --- GLOBAL INITIALIZATION ---
+function toggleFullscreen() {
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+    else if (document.exitFullscreen) document.exitFullscreen();
+}
+
 function initializeDashboard() {
-  // --- GIẢI PHÁP GIỮ SERVER-ADMIN "THỨC" ---
-  // Tạo một kết nối Socket.IO tới chính server-admin này.
-  // Kết nối này không làm gì cả ngoài việc tồn tại.
-  // Sự tồn tại của kết nối WebSocket liên tục (với ping/pong)
-  // sẽ báo cho nền tảng hosting rằng server đang hoạt động và không bị đưa vào trạng thái ngủ.
   const keepAliveSocket = io();
-  keepAliveSocket.on('connect', () => {
-    console.log('✅ Keep-alive connection to admin server established to prevent idling.');
-  });
-  keepAliveSocket.on('disconnect', () => {
-    console.warn('⚠️ Keep-alive connection to admin server lost. It will auto-reconnect.');
-  });
-  // --- KẾT THÚC GIẢI PHÁP ---
+  keepAliveSocket.on('connect', () => console.log('✅ Keep-alive connection established.'));
+  keepAliveSocket.on('disconnect', () => console.warn('⚠️ Keep-alive connection lost.'));
   
   loadServers();
   renderServerList();
   
-  if (servers.length > 0) {
-    connectToServer(servers[0]);
+  if (allServices.length > 0) {
+    selectServer(allServices[0]);
   } else {
-      // This case should not happen anymore with hardcoded servers, but it's good practice to keep it.
-      statusText.textContent = 'No Servers';
+      statusText.textContent = 'No Services';
       terminalLoader.classList.remove('hidden');
       loaderAscii.textContent = '\n(>_<)\n\n';
-      loaderText.textContent = 'Chưa có server nào được cấu hình. Hãy thêm một server để bắt đầu.';
+      loaderText.textContent = 'Không có dịch vụ nào.';
   }
 
   // Event Listeners
@@ -426,23 +492,23 @@ function initializeDashboard() {
   document.getElementById('cancel-btn').addEventListener('click', hideModal);
   serverForm.addEventListener('submit', handleFormSubmit);
 
-  // Close menus/modals with a click outside
+  document.getElementById('add-uptime-site-btn').addEventListener('click', showUptimeModal);
+  document.getElementById('uptime-cancel-btn').addEventListener('click', hideUptimeModal);
+  uptimeForm.addEventListener('submit', handleUptimeFormSubmit);
+  
+  initializeBrowser();
+
   document.addEventListener('click', (e) => {
     if (!e.target.closest('.options-btn') && !e.target.closest('.options-menu')) {
       document.querySelectorAll('.options-menu').forEach(m => m.classList.remove('show'));
     }
-    if (e.target === modalOverlay) {
-        hideModal();
-    }
+    if (e.target === modalOverlay) hideModal();
+    if (e.target === uptimeModalOverlay) hideUptimeModal();
   });
 
-  // Send terminal input data
   term.onData(data => {
-    if (currentSocket) {
-      currentSocket.emit('input', data);
-    }
+    if (currentSocket) currentSocket.emit('input', data);
   });
 }
 
-// Initialize when the page is loaded
 window.addEventListener('load', initializeDashboard);
