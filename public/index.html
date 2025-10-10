@@ -385,14 +385,84 @@
       .dot.min   { background: linear-gradient(180deg,#ffd27a,#ffb84d) }
       .dot.max   { background: linear-gradient(180deg,#7ef3b2,#2ad58a) }
 
+      /* Terminal Tabs */
+      .terminal-tabs {
+        display: flex;
+        align-items: flex-end;
+        gap: 4px;
+        padding: 0 8px;
+        margin-top: 8px;
+        flex-shrink: 0;
+      }
+      .terminal-tabs .tab-btn {
+        background: rgba(255,255,255,0.01);
+        border: 1px solid var(--border);
+        border-bottom: 1px solid rgba(255,255,255,0.02);
+        color: var(--muted);
+        padding: 8px 14px;
+        border-radius: 8px 8px 0 0;
+        cursor: pointer;
+        font-size: 13px;
+        transition: all 150ms ease;
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-family: inherit;
+      }
+      .terminal-tabs .tab-btn:hover {
+        background: rgba(255,255,255,0.04);
+        color: #e6eef2;
+      }
+      .terminal-tabs .tab-btn.active {
+        background: transparent;
+        border-color: rgba(255,255,255,0.02);
+        border-top: 2px solid var(--accent);
+        border-bottom: 1px solid transparent;
+        padding-top: 7px;
+        color: #f6fbfd;
+        font-weight: 500;
+      }
+      .terminal-tabs .add-tab-btn {
+        border: 1px dashed rgba(255,255,255,0.1);
+        background: transparent;
+        color: var(--muted);
+        font-weight: bold;
+        font-size: 16px;
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-left: 6px;
+        padding: 0;
+        cursor: pointer;
+        transition: all 150ms ease;
+      }
+      .terminal-tabs .add-tab-btn:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+        transform: scale(1.05);
+      }
+      .terminal-tabs .close-tab-btn {
+        font-size: 12px;
+        padding: 2px 4px;
+        border-radius: 4px;
+        opacity: 0.5;
+        transition: all 150ms ease;
+      }
+      .terminal-tabs .tab-btn:hover .close-tab-btn { opacity: 1; }
+      .terminal-tabs .close-tab-btn:hover { background: rgba(255,255,255,0.1); }
+      
       /* Xterm area */
       #terminal {
         flex: 1;
-        margin-top: 8px;
         border-radius: 10px;
         overflow: hidden;
         border: 1px solid rgba(255,255,255,0.02);
         background: transparent !important;
+        border-top-left-radius: 0;
       }
       
       /* Terminal Loader Overlay */
@@ -629,6 +699,9 @@
               </div>
               <div id="terminal-title" style="margin-left:12px;font-weight:600;color:#dff8ef">Terminal</div>
               <div style="margin-left:auto;color:var(--muted);font-size:13px">Shell: bash · UTF-8</div>
+            </div>
+            <div class="terminal-tabs" id="terminal-tabs-container">
+                <!-- Tabs will be rendered by JS -->
             </div>
             <div id="terminal"></div>
           </section>
