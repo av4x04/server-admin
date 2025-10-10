@@ -66,6 +66,10 @@ let allServices = []; // Combined list of local services and remote servers
 let userServers = [];
 const resettingServers = {}; // State to track resetting servers: { [uid]: endTime }
 
+// Terminal multi-session state
+let terminalSessions = new Map();
+let activeTerminalSessionId = null;
+
 // UI Elements
 const statusText = document.getElementById('status-text');
 const serverListContainer = document.getElementById('server-list');
@@ -74,33 +78,25 @@ const serverForm = document.getElementById('server-form');
 const terminalLoader = document.getElementById('terminal-loader');
 const loaderAscii = document.getElementById('loader-ascii');
 const loaderText = document.getElementById('loader-text');
+const terminalTabsContainer = document.getElementById('terminal-tabs-container');
 
 // Views
 const allViews = document.querySelectorAll('.view-container');
 const terminalView = document.getElementById('terminal-view');
 const uptimeView = document.getElementById('uptime-view');
 
-
-/**
- * Switches the main view in the right panel.
- * @param {string} viewId The ID of the view to show.
- */
 function switchToView(viewId) {
     allViews.forEach(view => {
         view.style.display = view.id === viewId ? 'flex' : 'none';
     });
 }
 
-/**
- * Loads user-defined servers from localStorage.
- */
 function loadServers() {
     const storedUserServers = localStorage.getItem(SERVER_STORAGE_KEY);
     try {
         userServers = storedUserServers ? JSON.parse(storedUserServers) : [];
     } catch (e) {
         console.error("Error parsing user servers from localStorage", e);
-        localStorage.removeItem(SERVER_STORAGE_KEY);
         userServers = [];
     }
     allServices = [...LOCAL_SERVICES, ...HARDCODED_SERVERS, ...userServers];
@@ -110,32 +106,23 @@ function saveServers() {
     localStorage.setItem(SERVER_STORAGE_KEY, JSON.stringify(userServers));
 }
 
-/**
- * Renders the combined list of services and servers in the sidebar.
- */
 function renderServerList() {
     serverListContainer.innerHTML = '';
     allServices.forEach((service, index) => {
         const iconClass = service.icon || ICONS[index % ICONS.length];
         const serverElement = document.createElement('div');
         serverElement.className = 'tab-item';
-        if (service.uid === activeServerUid) {
-            serverElement.classList.add('active');
-        }
-        serverElement.setAttribute('role', 'listitem');
+        if (service.uid === activeServerUid) serverElement.classList.add('active');
         serverElement.dataset.uid = service.uid;
 
-        let actionsHtml = '';
-        if (!service.isLocal) {
-            actionsHtml = `
+        let actionsHtml = !service.isLocal ? `
             <div class="tab-actions">
                 <button class="options-btn" title="Tùy chọn"><i class="fas fa-ellipsis-v"></i></button>
                 <div class="options-menu">
                     <a href="#" class="reset-btn"><i class="fas fa-sync-alt"></i> Reset</a>
                     ${!service.isHardcoded ? `<a href="#" class="delete-btn delete"><i class="fas fa-trash-alt"></i> Xóa</a>` : ''}
                 </div>
-            </div>`;
-        }
+            </div>` : '';
         
         serverElement.innerHTML = `
             <div class="icon-circle"><i class="${iconClass}"></i></div>
@@ -143,34 +130,26 @@ function renderServerList() {
                 <div class="tab-name">${service.name}</div>
                 <div class="tab-sub">${service.description || service.url}</div>
             </div>
-            ${actionsHtml}
-        `;
+            ${actionsHtml}`;
         
         serverElement.addEventListener('click', (e) => {
-            if (!e.target.closest('.tab-actions')) {
-                selectServer(service);
-            }
+            if (!e.target.closest('.tab-actions')) selectServer(service);
         });
 
         if (!service.isLocal) {
             const optionsBtn = serverElement.querySelector('.options-btn');
-            const optionsMenu = serverElement.querySelector('.options-menu');
             optionsBtn.addEventListener('click', e => {
                 e.stopPropagation();
-                document.querySelectorAll('.options-menu').forEach(m => m.classList.remove('show'));
-                optionsMenu.classList.add('show');
+                document.querySelectorAll('.options-menu.show').forEach(m => m.classList.remove('show'));
+                optionsBtn.nextElementSibling.classList.toggle('show');
             });
-
             serverElement.querySelector('.reset-btn').addEventListener('click', e => {
                 e.stopPropagation();
-                optionsMenu.classList.remove('show');
                 handleReset(service);
             });
-
             if (!service.isHardcoded) {
                 serverElement.querySelector('.delete-btn').addEventListener('click', e => {
                     e.stopPropagation();
-                    optionsMenu.classList.remove('show');
                     handleDelete(service);
                 });
             }
@@ -179,23 +158,22 @@ function renderServerList() {
     });
 }
 
-/**
- * Main handler for when a user selects an item from the left panel.
- * @param {object} service The selected service or server object.
- */
 function selectServer(service) {
     if (activeServerUid === service.uid) return;
 
     activeServerUid = service.uid;
-    if (currentSocket) {
-        currentSocket.disconnect();
-        currentSocket = null;
-    }
+    if (currentSocket) currentSocket.disconnect();
+    currentSocket = null;
     
-    renderServerList(); // Update active highlight
+    // Reset terminal session state
+    terminalSessions.clear();
+    activeTerminalSessionId = null;
+    renderTerminalTabs();
+    
+    renderServerList();
 
     if (service.isLocal) {
-        terminalLoader.classList.add('hidden'); // Hide terminal loader
+        terminalLoader.classList.add('hidden');
         if (service.uid === 'internal-uptime') {
             switchToView('uptime-view');
             statusText.textContent = 'Uptime Monitor';
@@ -227,49 +205,120 @@ function showResettingOverlay(server, duration) {
 
     setTimeout(() => {
         delete resettingServers[server.uid];
-        if (activeServerUid === server.uid) {
-            selectServer(server);
-        }
+        if (activeServerUid === server.uid) selectServer(server);
     }, duration);
 }
 
 function connectToTerminalServer(server) {
-  const resetEndTime = resettingServers[server.uid];
-  if (resetEndTime && Date.now() < resetEndTime) {
-      showResettingOverlay(server, resetEndTime - Date.now());
-      return;
-  }
-  
-  statusText.textContent = `Đang kết nối...`;
-  document.getElementById('terminal-title').textContent = server.name;
-  showConnectionAnimation(server);
-
-  currentSocket = io(server.url, { transports: ['websocket'] });
-
-  currentSocket.on('connect', () => {
-    terminalLoader.classList.add('hidden');
-    statusText.textContent = `Đã kết nối: ${server.name}`;
-    term.write(`\r\n\x1b[32m✅ Kết nối thành công đến ${server.name}\x1b[0m\r\n`);
-  });
-
-  currentSocket.on('disconnect', () => {
-    terminalLoader.classList.add('hidden');
-    if (activeServerUid === server.uid) {
-        statusText.textContent = 'Mất kết nối';
-        term.write('\r\n\x1b[31m⚠️ Mất kết nối. Đang thử kết nối lại...\x1b[0m\r\n');
+    const resetEndTime = resettingServers[server.uid];
+    if (resetEndTime && Date.now() < resetEndTime) {
+        showResettingOverlay(server, resetEndTime - Date.now());
+        return;
     }
-  });
   
-  currentSocket.on('output', data => {
-      terminalLoader.classList.add('hidden');
-      term.write(data);
-  });
+    statusText.textContent = `Đang kết nối...`;
+    document.getElementById('terminal-title').textContent = server.name;
+    showConnectionAnimation(server);
 
-  currentSocket.on('history', history => {
-    terminalLoader.classList.add('hidden');
+    currentSocket = io(server.url, { transports: ['websocket'] });
+
+    currentSocket.on('connect', () => {
+        terminalLoader.classList.add('hidden');
+        statusText.textContent = `Đã kết nối: ${server.name}`;
+        term.focus();
+    });
+
+    currentSocket.on('disconnect', () => {
+        if (activeServerUid === server.uid) {
+            statusText.textContent = 'Mất kết nối';
+            term.write('\r\n\x1b[31m⚠️ Mất kết nối.\x1b[0m\r\n');
+        }
+    });
+  
+    currentSocket.on('output', data => term.write(data));
+    currentSocket.on('history', history => {
+        terminalLoader.classList.add('hidden');
+        term.reset();
+        term.write(history);
+    });
+
+    // Multi-session listeners
+    currentSocket.on('sessions-list', (sessionList) => {
+        terminalSessions.clear();
+        sessionList.forEach(s => terminalSessions.set(s.id, s));
+        if (terminalSessions.size > 0 && !terminalSessions.has(activeTerminalSessionId)) {
+            const firstSessionId = terminalSessions.keys().next().value;
+            switchTerminalSession(firstSessionId);
+        } else {
+            renderTerminalTabs();
+        }
+    });
+
+    currentSocket.on('session-created', (session) => {
+        terminalSessions.set(session.id, session);
+        renderTerminalTabs();
+        switchTerminalSession(session.id);
+    });
+
+    currentSocket.on('session-closed', ({ id }) => {
+        const wasActive = (id === activeTerminalSessionId);
+        if (terminalSessions.has(id)) {
+            terminalSessions.delete(id);
+            if (wasActive && terminalSessions.size > 0) {
+                switchTerminalSession(terminalSessions.keys().next().value);
+            } else if (terminalSessions.size === 0) {
+                activeTerminalSessionId = null;
+                term.reset();
+                renderTerminalTabs();
+            } else {
+                renderTerminalTabs();
+            }
+        }
+    });
+}
+
+function renderTerminalTabs() {
+    terminalTabsContainer.innerHTML = '';
+    if (allServices.find(s => s.uid === activeServerUid)?.isLocal) return;
+
+    terminalSessions.forEach(session => {
+        const tab = document.createElement('button');
+        tab.className = 'tab-btn';
+        tab.dataset.sessionId = session.id;
+        tab.textContent = session.name;
+        if (session.id === activeTerminalSessionId) tab.classList.add('active');
+
+        const closeBtn = document.createElement('i');
+        closeBtn.className = 'fas fa-times close-tab-btn';
+        if (terminalSessions.size > 1) {
+            tab.appendChild(closeBtn);
+            closeBtn.onclick = e => {
+                e.stopPropagation();
+                if (confirm(`Bạn có chắc muốn đóng "${session.name}"?`)) {
+                    currentSocket.emit('close-session', session.id);
+                }
+            };
+        }
+        tab.onclick = () => switchTerminalSession(session.id);
+        terminalTabsContainer.appendChild(tab);
+    });
+
+    const addBtn = document.createElement('button');
+    addBtn.className = 'add-tab-btn';
+    addBtn.title = 'Phiên mới';
+    addBtn.textContent = '+';
+    addBtn.onclick = () => currentSocket.emit('create-session');
+    terminalTabsContainer.appendChild(addBtn);
+}
+
+function switchTerminalSession(sessionId) {
+    if (!terminalSessions.has(sessionId) || sessionId === activeTerminalSessionId) return;
+    
+    activeTerminalSessionId = sessionId;
+    currentSocket.emit('switch-session', sessionId);
     term.reset();
-    term.write(history);
-  });
+    renderTerminalTabs();
+    term.focus();
 }
 
 async function handleReset(server) {
@@ -279,36 +328,26 @@ async function handleReset(server) {
     }
     
     if (activeServerUid !== server.uid) selectServer(server);
-
     term.write(`\r\n\x1b[33m[Reset] Đang gửi lệnh reset đến '${server.name}'...\x1b[0m\r\n`);
     
     try {
         await fetch(server.deployHookUrl, { method: 'POST', mode: 'no-cors' });
-        term.write(`\r\n\x1b[32m[Reset] Tín hiệu reset đã được gửi. Server sẽ khởi động lại.\x1b[0m\r\n`);
+        term.write(`\r\n\x1b[32m[Reset] Tín hiệu đã được gửi. Server sẽ khởi động lại.\x1b[0m\r\n`);
         const RESET_DURATION = 180000; // 3 minutes
         resettingServers[server.uid] = Date.now() + RESET_DURATION;
-        if (activeServerUid === server.uid) {
-            showResettingOverlay(server, RESET_DURATION);
-        }
+        if (activeServerUid === server.uid) showResettingOverlay(server, RESET_DURATION);
     } catch (error) {
-        console.error('Lỗi khi kích hoạt deploy hook:', error);
-        term.write(`\r\n\x1b[31m[Lỗi Reset] Không thể gửi lệnh reset: ${error.message}\x1b[0m\r\n`);
+        term.write(`\r\n\x1b[31m[Lỗi Reset] Không thể gửi lệnh: ${error.message}\x1b[0m\r\n`);
     }
 }
 
 function handleDelete(serverToDelete) {
-    if (serverToDelete.isHardcoded || !confirm(`Bạn có chắc muốn xóa server '${serverToDelete.name}'?`)) return;
-
+    if (serverToDelete.isHardcoded || !confirm(`Bạn có chắc muốn xóa '${serverToDelete.name}'?`)) return;
     userServers = userServers.filter(s => s.uid !== serverToDelete.uid);
     saveServers();
-    loadServers(); // Recalculate allServices
-
+    loadServers();
     if (activeServerUid === serverToDelete.uid) {
-        if (currentSocket) currentSocket.disconnect();
-        currentSocket = null;
-        activeServerUid = null;
-        term.reset();
-        selectServer(allServices[0]); // Select the first available service
+        selectServer(allServices[0]);
     }
     renderServerList();
 }
@@ -326,14 +365,13 @@ function hideModal() {
 
 function handleFormSubmit(event) {
     event.preventDefault();
-    const newServer = {
+    userServers.push({
         uid: 'server_' + Date.now(),
         name: document.getElementById('server-name').value,
         url: document.getElementById('server-url').value,
         description: document.getElementById('server-description').value,
         deployHookUrl: document.getElementById('server-deploy-hook').value,
-    };
-    userServers.push(newServer);
+    });
     saveServers();
     loadServers();
     renderServerList();
@@ -345,52 +383,33 @@ const uptimeModalOverlay = document.getElementById('uptime-modal-overlay');
 const uptimeForm = document.getElementById('uptime-form');
 const uptimeViewContent = document.getElementById('uptime-view-content');
 
-/**
- * Called when the Uptime Monitor view is opened.
- * Subscribes to server-side events.
- */
 function initializeUptimeMonitor() {
     if (adminSocket && adminSocket.connected) {
-        uptimeViewContent.innerHTML = `<div class="empty-uptime"><i class="fas fa-spinner fa-spin"></i><p>Đang tải dữ liệu từ server...</p></div>`;
+        uptimeViewContent.innerHTML = `<div class="empty-uptime"><i class="fas fa-spinner fa-spin"></i><p>Đang tải dữ liệu...</p></div>`;
         adminSocket.emit('uptime:subscribe');
     } else {
-        uptimeViewContent.innerHTML = `<div class="empty-uptime"><i class="fas fa-exclamation-triangle"></i><p>Không thể kết nối tới server admin.<br>Vui lòng làm mới trang.</p></div>`;
+        uptimeViewContent.innerHTML = `<div class="empty-uptime"><i class="fas fa-exclamation-triangle"></i><p>Không thể kết nối server admin.</p></div>`;
     }
 }
 
-/**
- * Renders the entire list of uptime sites from server data.
- * @param {object} state - The full state object from the server { sites, statuses }.
- */
 function renderUptimeList(state) {
     uptimeViewContent.innerHTML = '';
     if (!state.sites || state.sites.length === 0) {
-        uptimeViewContent.innerHTML = `<div class="empty-uptime"><i class="fas fa-satellite-dish"></i><p>Chưa có website nào được theo dõi.<br>Hãy thêm một trang để bắt đầu giám sát.</p></div>`;
+        uptimeViewContent.innerHTML = `<div class="empty-uptime"><i class="fas fa-satellite-dish"></i><p>Chưa có website nào được theo dõi.</p></div>`;
         return;
     }
     state.sites.forEach(site => {
         const card = createUptimeCard(site);
         uptimeViewContent.appendChild(card);
-        if (state.statuses[site.uid]) {
-            updateUptimeCard(site.uid, state.statuses[site.uid]);
-        }
+        if (state.statuses[site.uid]) updateUptimeCard(site.uid, state.statuses[site.uid]);
     });
 }
 
-/**
- * Creates an HTML element for a single uptime site card.
- * @param {object} site - The site data { uid, name, url, isHardcoded }.
- * @returns {HTMLElement} The card element.
- */
 function createUptimeCard(site) {
     const card = document.createElement('div');
     card.className = 'uptime-card';
     card.dataset.uid = site.uid;
-
-    const deleteButtonHtml = site.isHardcoded
-        ? '' // Don't render delete button for hardcoded sites
-        : `<button class="btn ghost danger uptime-delete-btn" style="padding: 4px 8px; font-size: 12px;">Delete</button>`;
-
+    const deleteBtnHtml = !site.isHardcoded ? `<button class="btn ghost danger uptime-delete-btn" style="padding: 4px 8px; font-size: 12px;">Xóa</button>` : '';
     card.innerHTML = `
         <div class="uptime-header">
             <div class="uptime-title">${site.name} ${site.isHardcoded ? '<i class="fas fa-lock" style="font-size: 10px; color: var(--muted);"></i>' : ''}</div>
@@ -399,12 +418,10 @@ function createUptimeCard(site) {
         <div class="uptime-url">${site.url}</div>
         <div class="uptime-meta">
             <span>Response: <span class="uptime-response">- ms</span></span>
-            ${deleteButtonHtml}
-        </div>
-    `;
-
+            ${deleteBtnHtml}
+        </div>`;
     if (!site.isHardcoded) {
-        card.querySelector('.uptime-delete-btn').addEventListener('click', (e) => {
+        card.querySelector('.uptime-delete-btn').addEventListener('click', e => {
             e.stopPropagation();
             deleteUptimeSite(site.uid);
         });
@@ -412,72 +429,42 @@ function createUptimeCard(site) {
     return card;
 }
 
-/**
- * Updates an existing uptime card with new status information.
- * @param {string} uid - The unique ID of the site.
- * @param {object} statusData - The new status { status, responseTime }.
- */
 function updateUptimeCard(uid, statusData) {
     const card = document.querySelector(`.uptime-card[data-uid="${uid}"]`);
     if (!card) return;
-
     const statusEl = card.querySelector('.uptime-status');
     const responseEl = card.querySelector('.uptime-response');
-
     statusEl.classList.remove('up', 'down', 'pending');
-    
     switch(statusData.status) {
         case 'up':
-            statusEl.classList.add('up');
-            statusEl.textContent = 'Up';
-            responseEl.textContent = `${statusData.responseTime} ms`;
-            break;
+            statusEl.classList.add('up'); statusEl.textContent = 'Up';
+            responseEl.textContent = `${statusData.responseTime} ms`; break;
         case 'down':
-            statusEl.classList.add('down');
-            statusEl.textContent = 'Down';
-            responseEl.textContent = 'N/A';
-            break;
+            statusEl.classList.add('down'); statusEl.textContent = 'Down';
+            responseEl.textContent = 'N/A'; break;
         default:
-            statusEl.classList.add('pending');
-            statusEl.textContent = 'Checking...';
-            responseEl.textContent = '- ms';
-            break;
+            statusEl.classList.add('pending'); statusEl.textContent = 'Checking...';
+            responseEl.textContent = '- ms'; break;
     }
 }
 
-function showUptimeModal() {
-    uptimeForm.reset();
-    uptimeModalOverlay.classList.add('show');
-}
+function showUptimeModal() { uptimeForm.reset(); uptimeModalOverlay.classList.add('show'); }
+function hideUptimeModal() { uptimeModalOverlay.classList.remove('show'); }
 
-function hideUptimeModal() {
-    uptimeModalOverlay.classList.remove('show');
-}
-
-/**
- * Handles the submission of the "Add Site" form.
- * Emits an event to the server.
- */
 function handleUptimeFormSubmit(e) {
     e.preventDefault();
-    const siteData = {
+    adminSocket.emit('uptime:add_site', {
         name: document.getElementById('uptime-name').value,
         url: document.getElementById('uptime-url').value,
-    };
-    adminSocket.emit('uptime:add_site', siteData);
+    });
     hideUptimeModal();
 }
 
-/**
- * Handles the deletion of an uptime site.
- * Emits an event to the server.
- */
 function deleteUptimeSite(uid) {
     if (!confirm('Bạn có chắc muốn ngừng theo dõi website này?')) return;
     adminSocket.emit('uptime:delete_site', uid);
 }
 
-// --- GLOBAL INITIALIZATION ---
 function toggleFullscreen() {
     if (!document.fullscreenElement) document.documentElement.requestFullscreen();
     else if (document.exitFullscreen) document.exitFullscreen();
@@ -486,39 +473,19 @@ function toggleFullscreen() {
 function initializeDashboard() {
   adminSocket = io();
   adminSocket.on('connect', () => {
-    console.log('✅ Admin socket connected.');
-    if (activeServerUid === 'internal-uptime') {
-        initializeUptimeMonitor();
-    }
+    if (activeServerUid === 'internal-uptime') initializeUptimeMonitor();
   });
-  adminSocket.on('disconnect', () => console.warn('⚠️ Admin socket lost connection.'));
-
-  // --- Listen for Uptime events from server ---
-  adminSocket.on('uptime:full_list', (state) => {
-      console.log('Received full uptime list from server:', state);
-      renderUptimeList(state);
-  });
-  
+  adminSocket.on('uptime:full_list', renderUptimeList);
   adminSocket.on('uptime:site_added', (newSite) => {
-      console.log('Server added new site:', newSite);
       const emptyState = uptimeViewContent.querySelector('.empty-uptime');
       if (emptyState) emptyState.remove();
-      const card = createUptimeCard(newSite);
-      uptimeViewContent.appendChild(card);
+      uptimeViewContent.appendChild(createUptimeCard(newSite));
   });
-  
   adminSocket.on('uptime:site_removed', (uid) => {
-      console.log('Server removed site:', uid);
-      const card = document.querySelector(`.uptime-card[data-uid="${uid}"]`);
-      if (card) card.remove();
-      if (uptimeViewContent.childElementCount === 0) {
-          renderUptimeList({ sites: [], statuses: {} });
-      }
+      document.querySelector(`.uptime-card[data-uid="${uid}"]`)?.remove();
+      if (uptimeViewContent.childElementCount === 0) renderUptimeList({ sites: [], statuses: {} });
   });
-  
-  adminSocket.on('uptime:update', (updateData) => {
-      updateUptimeCard(updateData.uid, updateData);
-  });
+  adminSocket.on('uptime:update', (updateData) => updateUptimeCard(updateData.uid, updateData));
   
   loadServers();
   renderServerList();
@@ -528,7 +495,7 @@ function initializeDashboard() {
   } else {
       statusText.textContent = 'No Services';
       terminalLoader.classList.remove('hidden');
-      loaderAscii.textContent = '\n(>_<)\n\n';
+      loaderAscii.textContent = '(>_<)';
       loaderText.textContent = 'Không có dịch vụ nào.';
   }
 
@@ -542,15 +509,17 @@ function initializeDashboard() {
   uptimeForm.addEventListener('submit', handleUptimeFormSubmit);
 
   document.addEventListener('click', (e) => {
-    if (!e.target.closest('.options-btn') && !e.target.closest('.options-menu')) {
-      document.querySelectorAll('.options-menu').forEach(m => m.classList.remove('show'));
+    if (!e.target.closest('.options-btn')) {
+        document.querySelectorAll('.options-menu.show').forEach(m => m.classList.remove('show'));
     }
     if (e.target === modalOverlay) hideModal();
     if (e.target === uptimeModalOverlay) hideUptimeModal();
   });
 
   term.onData(data => {
-    if (currentSocket) currentSocket.emit('input', data);
+    if (currentSocket && activeTerminalSessionId) {
+        currentSocket.emit('input', { sessionId: activeTerminalSessionId, data });
+    }
   });
 }
 
