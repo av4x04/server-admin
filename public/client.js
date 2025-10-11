@@ -44,7 +44,8 @@ const LOCAL_SERVICES = [
 const HARDCODED_SERVERS = [
     {
         uid: 'hardcoded-1', name: 'Terminal-v1', url: 'https://server-terminal-v1-rvg9.onrender.com',
-        description: 'Server-Terminal 🚀', deployHookUrl: '', isHardcoded: true
+        description: 'Server-Terminal 🚀', deployHookUrl: 'https://api.render.com/deploy/srv-d3j6j0ffte5s73an1ch0?key=-_PhfYyBRnI',
+        isHardcoded: true
     },
     
     {
