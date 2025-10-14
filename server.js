@@ -4,6 +4,7 @@ const path = require('path');
 const http = require('http');
 const { Server } = require('socket.io');
 const https = require('https');
+const os = require('os');
 
 const app = express();
 const server = http.createServer(app);
@@ -11,13 +12,62 @@ const io = new Server(server);
 
 const PORT = process.env.PORT || 4000;
 
-// Phục vụ các file tĩnh từ thư mục 'public'
+// Serve static files from 'public' directory
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Bất kỳ request nào không khớp sẽ trả về index.html
+// Any request that doesn't match a static file will return index.html
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
+
+
+// --- SYSTEM STATUS LOGIC (SERVER-SIDE) ---
+let lastCpuTimes = os.cpus().map(cpu => ({ ...cpu.times }));
+
+function getCpuUsage() {
+    const currentCpuTimes = os.cpus();
+    const usage = currentCpuTimes.map((cpu, i) => {
+        const lastTimes = lastCpuTimes[i];
+        const currentTimes = cpu.times;
+
+        const idle = currentTimes.idle - lastTimes.idle;
+        const total = (currentTimes.user - lastTimes.user) +
+                      (currentTimes.nice - lastTimes.nice) +
+                      (currentTimes.sys - lastTimes.sys) +
+                      (currentTimes.irq - lastTimes.irq) +
+                      idle;
+
+        return total === 0 ? 0 : 100 * (1 - idle / total);
+    });
+    lastCpuTimes = currentCpuTimes.map(cpu => ({ ...cpu.times }));
+    return usage;
+}
+
+setInterval(() => {
+    const cpus = getCpuUsage();
+    const totalCpu = cpus.reduce((acc, curr) => acc + curr, 0) / cpus.length;
+    
+    const totalMem = os.totalmem();
+    const freeMem = os.freemem();
+    const usedMem = totalMem - freeMem;
+
+    io.emit('system-stats', {
+        cpu: totalCpu,
+        cpus: cpus,
+        ram: {
+            total: totalMem,
+            used: usedMem,
+            percent: (usedMem / totalMem) * 100,
+        },
+        info: {
+            hostname: os.hostname(),
+            platform: os.platform(),
+            release: os.release(),
+            nodeVersion: process.version,
+            uptime: os.uptime(),
+        }
+    });
+}, 1500); // Send stats every 1.5 seconds
 
 
 // --- UPTIME MONITOR LOGIC (SERVER-SIDE) ---
@@ -30,33 +80,20 @@ const HARDCODED_UPTIME_SITES = [
     { uid: 'hc_site_4', name: 'Server Terminal v4', url: 'https://server-terminal-v4.onrender.com', isHardcoded: true },
 ];
 
-// --- Refactored State Management ---
-// 1. Serializable Configuration Data: A clean list of sites to monitor.
 let sites = [...HARDCODED_UPTIME_SITES];
-
-// 2. Serializable Runtime Status: Stores the current status of each site.
 const statuses = {};
-
-// 3. Non-Serializable Runtime State: Stores interval IDs. NEVER sent to client.
 const checkIntervals = {};
+const CHECK_INTERVAL = 60000;
 
-const CHECK_INTERVAL = 60000; // Check every 60 seconds
-
-/**
- * Checks the status of a single URL.
- * @param {object} site - The site to check { uid, url }.
- */
 function checkSiteStatus(site) {
     const startTime = Date.now();
     const req = https.get(site.url, { timeout: 10000 }, (res) => {
         const responseTime = Date.now() - startTime;
         const status = (res.statusCode >= 200 && res.statusCode < 400) ? 'up' : 'down';
-        
         const update = { uid: site.uid, status, responseTime };
         statuses[site.uid] = update;
         io.emit('uptime:update', update);
-
-        res.resume(); // Consume response data to free up memory
+        res.resume();
     }).on('error', (err) => {
         const update = { uid: site.uid, status: 'down', responseTime: -1 };
         statuses[site.uid] = update;
@@ -71,22 +108,14 @@ function checkSiteStatus(site) {
     });
 }
 
-/**
- * Starts the monitoring interval for a site.
- * @param {object} site - The site to monitor.
- */
 function startMonitoring(site) {
     if (checkIntervals[site.uid]) {
         clearInterval(checkIntervals[site.uid]);
     }
-    checkSiteStatus(site); // Initial check
+    checkSiteStatus(site);
     checkIntervals[site.uid] = setInterval(() => checkSiteStatus(site), CHECK_INTERVAL);
 }
 
-/**
- * Stops monitoring a site.
- * @param {string} uid - The unique ID of the site.
- */
 function stopMonitoring(uid) {
     if (checkIntervals[uid]) {
         clearInterval(checkIntervals[uid]);
@@ -94,9 +123,7 @@ function stopMonitoring(uid) {
     }
 }
 
-// Start monitoring all initial sites
 sites.forEach(startMonitoring);
-
 
 io.on('connection', (socket) => {
   console.log(`Admin UI client connected: ${socket.id}`);
@@ -104,14 +131,30 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     console.log(`Admin UI client disconnected: ${socket.id}`);
   });
+  
+  // System Status subscription
+  socket.on('system:subscribe', () => {
+    // Send initial full data on subscribe
+    const cpus = getCpuUsage();
+    const totalCpu = cpus.reduce((acc, curr) => acc + curr, 0) / cpus.length;
+    const totalMem = os.totalmem();
+    const freeMem = os.freemem();
+    const usedMem = totalMem - freeMem;
 
-  // --- Uptime Event Handlers ---
+    socket.emit('system-stats', {
+        cpu: totalCpu,
+        cpus: cpus,
+        ram: { total: totalMem, used: usedMem, percent: (usedMem / totalMem) * 100 },
+        info: {
+            hostname: os.hostname(), platform: os.platform(), release: os.release(),
+            nodeVersion: process.version, uptime: os.uptime(),
+        }
+    });
+  });
+
+  // Uptime Event Handlers
   socket.on('uptime:subscribe', () => {
-      // Always send a clean, serializable state to the client.
-      socket.emit('uptime:full_list', {
-        sites: sites,
-        statuses: statuses
-      });
+      socket.emit('uptime:full_list', { sites, statuses });
   });
 
   socket.on('uptime:add_site', (siteData) => {
@@ -121,7 +164,7 @@ io.on('connection', (socket) => {
           uid: 'site_' + Date.now(),
           name: siteData.name,
           url: siteData.url,
-          isHardcoded: false, // User-added sites are not hardcoded
+          isHardcoded: false,
       };
       
       sites.push(newSite);
@@ -133,7 +176,6 @@ io.on('connection', (socket) => {
       const siteIndex = sites.findIndex(s => s.uid === uid);
       if (siteIndex > -1) {
           const site = sites[siteIndex];
-          // IMPORTANT: Prevent deleting hardcoded sites
           if (site.isHardcoded) {
               console.warn(`Attempted to delete hardcoded site: ${site.name}. Denied.`);
               return;
@@ -146,7 +188,6 @@ io.on('connection', (socket) => {
       }
   });
 });
-
 
 server.listen(PORT, () => {
   console.log(`Admin server listening on http://localhost:${PORT}`);
