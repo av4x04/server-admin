@@ -25,6 +25,13 @@ const SERVER_STORAGE_KEY = 'admin-servers-list';
 // Define local/internal services
 const LOCAL_SERVICES = [
     {
+        uid: 'internal-system',
+        name: 'System Status',
+        description: 'Giám sát tài nguyên admin',
+        isLocal: true,
+        icon: 'fas fa-tachometer-alt'
+    },
+    {
         uid: 'internal-uptime',
         name: 'Uptime Monitor',
         description: 'Giám sát trạng thái website',
@@ -85,6 +92,8 @@ const terminalTabsContainer = document.getElementById('terminal-tabs-container')
 const allViews = document.querySelectorAll('.view-container');
 const terminalView = document.getElementById('terminal-view');
 const uptimeView = document.getElementById('uptime-view');
+const systemView = document.getElementById('system-view');
+
 
 function switchToView(viewId) {
     allViews.forEach(view => {
@@ -179,6 +188,12 @@ function selectServer(service) {
             switchToView('uptime-view');
             statusText.textContent = 'Uptime Monitor';
             initializeUptimeMonitor();
+        } else if (service.uid === 'internal-system') {
+            switchToView('system-view');
+            statusText.textContent = 'System Status';
+            if (adminSocket && adminSocket.connected) {
+                adminSocket.emit('system:subscribe');
+            }
         }
     } else {
         switchToView('terminal-view');
@@ -472,6 +487,66 @@ function deleteUptimeSite(uid) {
     adminSocket.emit('uptime:delete_site', uid);
 }
 
+// --- SYSTEM STATUS LOGIC (CLIENT-SIDE) ---
+let cpuHistory = [];
+const MAX_HISTORY_POINTS = 40; // 40 points * 1.5s interval = 60s of history
+const cpuChartPath = document.getElementById('cpu-chart-path');
+const cpuCoresContainer = document.getElementById('cpu-cores-container');
+
+function updateSystemStats(stats) {
+    // Update CPU
+    document.getElementById('cpu-usage-text').textContent = `${stats.cpu.toFixed(1)}%`;
+    
+    // Update CPU Chart
+    cpuHistory.push(stats.cpu);
+    if (cpuHistory.length > MAX_HISTORY_POINTS) {
+        cpuHistory.shift();
+    }
+    const pathData = cpuHistory.map((p, i) => {
+        const x = (i / (MAX_HISTORY_POINTS - 1)) * 100;
+        const y = 30 - (p / 100) * 30; // Invert Y-axis
+        return `${x},${y}`;
+    }).join(' L ');
+    cpuChartPath.setAttribute('d', `M ${pathData} L 100,30 L 0,30 Z`);
+    
+    // Update RAM
+    const ramUsedGb = stats.ram.used / (1024 ** 3);
+    const ramTotalGb = stats.ram.total / (1024 ** 3);
+    document.getElementById('ram-usage-text').textContent = `${ramUsedGb.toFixed(2)} GB`;
+    document.getElementById('ram-total-text').textContent = `${ramTotalGb.toFixed(2)} GB Total`;
+    document.getElementById('ram-progress-bar').style.width = `${stats.ram.percent}%`;
+    
+    // Update System Info (only once or if changed)
+    if (document.getElementById('info-hostname').textContent === '--') {
+        document.getElementById('info-hostname').textContent = stats.info.hostname;
+        document.getElementById('info-os').textContent = `${stats.info.platform} ${stats.info.release}`;
+        document.getElementById('info-node').textContent = stats.info.nodeVersion;
+    }
+    const uptime = new Date(stats.info.uptime * 1000).toISOString().substr(11, 8);
+    document.getElementById('info-uptime').textContent = uptime;
+    
+    // Update CPU Cores
+    if (cpuCoresContainer.childElementCount !== stats.cpus.length) {
+        cpuCoresContainer.innerHTML = '';
+        stats.cpus.forEach((core, i) => {
+            const coreEl = document.createElement('div');
+            coreEl.className = 'cpu-core-item';
+            coreEl.innerHTML = `
+                <span class="label">Core ${i}</span>
+                <div class="progress-bar">
+                    <div id="core-bar-${i}" class="progress-bar-inner" style="width: ${core.toFixed(1)}%;"></div>
+                </div>
+            `;
+            cpuCoresContainer.appendChild(coreEl);
+        });
+    } else {
+        stats.cpus.forEach((core, i) => {
+            const bar = document.getElementById(`core-bar-${i}`);
+            if(bar) bar.style.width = `${core.toFixed(1)}%`;
+        });
+    }
+}
+
 function toggleFullscreen() {
     if (!document.fullscreenElement) document.documentElement.requestFullscreen();
     else if (document.exitFullscreen) document.exitFullscreen();
@@ -482,10 +557,12 @@ function initializeDashboard() {
   adminSocket.on('connect', () => {
     // Re-initialize the currently selected local service upon reconnection
     const activeService = allServices.find(s => s.uid === activeServerUid);
-    if (activeService?.isLocal && activeService.uid === 'internal-uptime') {
-        initializeUptimeMonitor();
+    if (activeService?.isLocal) {
+        if (activeService.uid === 'internal-uptime') initializeUptimeMonitor();
+        if (activeService.uid === 'internal-system') adminSocket.emit('system:subscribe');
     }
   });
+  // Uptime listeners
   adminSocket.on('uptime:full_list', renderUptimeList);
   adminSocket.on('uptime:site_added', (newSite) => {
       const emptyState = uptimeViewContent.querySelector('.empty-uptime');
@@ -497,6 +574,9 @@ function initializeDashboard() {
       if (uptimeViewContent.childElementCount === 0) renderUptimeList({ sites: [], statuses: {} });
   });
   adminSocket.on('uptime:update', (updateData) => updateUptimeCard(updateData.uid, updateData));
+  
+  // System status listener
+  adminSocket.on('system-stats', updateSystemStats);
   
   loadServers();
   renderServerList();
