@@ -1,4 +1,4 @@
-  <!-- server-admin/public/index.html -->
+<!-- server-admin/public/index.html -->
   <!doctype html>
   <html lang="vi">
   <head>
@@ -519,7 +519,7 @@
           align-items: center;
           padding: 6px;
       }
-      .uptime-title-main { font-size: 15px; font-weight: 600; color: #f6fbfd; }
+      .view-header-title { font-size: 15px; font-weight: 600; color: #f6fbfd; }
       #uptime-view-content {
           flex-grow: 1;
           overflow-y: auto;
@@ -550,6 +550,87 @@
           color: var(--muted);
       }
       .empty-uptime i { font-size: 32px; margin-bottom: 12px; color: var(--accent); }
+
+      /* System Status View */
+      #system-view {
+          background: linear-gradient(180deg, var(--panel), rgba(255,255,255,0.01));
+          border: 1px solid var(--border);
+          box-shadow: var(--shadow);
+          padding: 14px;
+          display: flex;
+          flex-direction: column;
+          gap: 14px;
+      }
+      #system-view-content {
+          flex-grow: 1;
+          overflow-y: auto;
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+          gap: 20px;
+          padding: 10px;
+      }
+      .stat-card {
+        background: var(--glass);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+      }
+      .stat-card-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 12px;
+      }
+      .stat-card-header i { color: var(--accent); font-size: 16px; }
+      .stat-card-header .title { font-weight: 600; font-size: 14px; color: #eafff5; }
+      .stat-card-large-text { font-size: 32px; font-weight: 700; color: #fff; }
+      .stat-card-sub-text { font-size: 13px; color: var(--muted); margin-top: 4px; }
+      
+      .live-chart-container { position: relative; height: 80px; margin-top: auto; }
+      .live-chart { width: 100%; height: 100%; }
+      .live-chart .line {
+        stroke: var(--accent);
+        stroke-width: 2.5;
+        fill: url(#chart-gradient);
+        transition: d 1.5s linear;
+      }
+      .progress-bar {
+        width: 100%;
+        height: 10px;
+        background: rgba(255,255,255,0.05);
+        border-radius: 99px;
+        margin-top: auto;
+        overflow: hidden;
+      }
+      .progress-bar-inner {
+        height: 100%;
+        background: linear-gradient(90deg, var(--accent-2), var(--accent));
+        border-radius: 99px;
+        transition: width 0.5s ease-out;
+      }
+      
+      .system-info-list { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+      .system-info-list li {
+        display: flex;
+        justify-content: space-between;
+        font-size: 13px;
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 8px;
+      }
+      .system-info-list .label { color: var(--muted); }
+      .system-info-list .value { color: #f6fbfd; font-weight: 500; }
+      
+      .cpu-cores-container {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px 12px;
+        margin-top: 10px;
+      }
+      .cpu-core-item { display: flex; align-items: center; gap: 8px; }
+      .cpu-core-item .label { font-size: 12px; color: var(--muted); width: 40px; }
+      .cpu-core-item .progress-bar { height: 6px; }
 
 
       /* Modal Styles */
@@ -619,13 +700,15 @@
       /* Custom scrollbar */
       .tab-list::-webkit-scrollbar,
       .left-panel::-webkit-scrollbar,
-      #uptime-view-content::-webkit-scrollbar {
+      #uptime-view-content::-webkit-scrollbar,
+      #system-view-content::-webkit-scrollbar {
         width: 8px;
         height: 8px;
       }
       .tab-list::-webkit-scrollbar-thumb,
       .left-panel::-webkit-scrollbar-thumb,
-      #uptime-view-content::-webkit-scrollbar-thumb {
+      #uptime-view-content::-webkit-scrollbar-thumb,
+      #system-view-content::-webkit-scrollbar-thumb {
         background: rgba(255,255,255,0.04);
         border-radius: 999px;
       }
@@ -708,13 +791,72 @@
           <!-- Uptime Monitor View -->
           <section id="uptime-view" class="view-container" aria-label="Uptime Monitor" style="display: none;">
               <div class="uptime-header-bar">
-                  <div class="uptime-title-main">Uptime Monitor</div>
+                  <div class="view-header-title">Uptime Monitor</div>
                   <button id="add-uptime-site-btn" class="btn" title="Theo dõi website mới">
                       <i class="fas fa-plus"></i> Thêm trang
                   </button>
               </div>
               <div id="uptime-view-content">
                   <!-- Uptime cards will be dynamically populated here -->
+              </div>
+          </section>
+            
+          <!-- System Status View -->
+          <section id="system-view" class="view-container" aria-label="System Status" style="display: none;">
+              <div class="uptime-header-bar">
+                  <div class="view-header-title">System Status: Server Admin</div>
+              </div>
+              <div id="system-view-content">
+                  <div class="stat-card" style="grid-column: 1 / -1;">
+                      <div class="stat-card-header">
+                          <i class="fas fa-microchip"></i>
+                          <div class="title">CPU Usage</div>
+                      </div>
+                      <div class="stat-card-large-text" id="cpu-usage-text">--%</div>
+                      <div class="live-chart-container">
+                          <svg class="live-chart" viewBox="0 0 100 30" preserveAspectRatio="none">
+                              <defs>
+                                <linearGradient id="chart-gradient" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stop-color="var(--accent)" stop-opacity="0.3"/>
+                                    <stop offset="100%" stop-color="var(--accent)" stop-opacity="0"/>
+                                </linearGradient>
+                              </defs>
+                              <path id="cpu-chart-path" class="line" d="M 0 30 L 100 30" />
+                          </svg>
+                      </div>
+                  </div>
+                  <div class="stat-card">
+                      <div class="stat-card-header">
+                          <i class="fas fa-memory"></i>
+                          <div class="title">Memory Usage</div>
+                      </div>
+                      <div class="stat-card-large-text" id="ram-usage-text">-- GB</div>
+                      <div class="stat-card-sub-text" id="ram-total-text">-- GB Total</div>
+                      <div class="progress-bar">
+                          <div id="ram-progress-bar" class="progress-bar-inner" style="width: 0%;"></div>
+                      </div>
+                  </div>
+                  <div class="stat-card">
+                      <div class="stat-card-header">
+                        <i class="fas fa-info-circle"></i>
+                        <div class="title">System Info</div>
+                      </div>
+                      <ul class="system-info-list">
+                          <li><span class="label">Hostname:</span> <span class="value" id="info-hostname">--</span></li>
+                          <li><span class="label">OS:</span> <span class="value" id="info-os">--</span></li>
+                          <li><span class="label">Node.js:</span> <span class="value" id="info-node">--</span></li>
+                          <li><span class="label">Uptime:</span> <span class="value" id="info-uptime">--</span></li>
+                      </ul>
+                  </div>
+                  <div class="stat-card" style="grid-column: 1 / -1;">
+                    <div class="stat-card-header">
+                        <i class="fas fa-layer-group"></i>
+                        <div class="title">CPU Cores Load</div>
+                    </div>
+                    <div class="cpu-cores-container" id="cpu-cores-container">
+                        <!-- CPU core bars will be generated here -->
+                    </div>
+                  </div>
               </div>
           </section>
 
