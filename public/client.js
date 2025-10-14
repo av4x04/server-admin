@@ -177,8 +177,7 @@ function selectServer(service) {
         terminalLoader.classList.add('hidden');
         if (service.uid === 'internal-uptime') {
             switchToView('uptime-view');
-            statusText.textContent = '(^‿^)';
-            statusText.title = 'Uptime Monitor';
+            statusText.textContent = 'Uptime Monitor';
             initializeUptimeMonitor();
         }
     } else {
@@ -202,8 +201,7 @@ function showResettingOverlay(server, duration) {
     terminalLoader.classList.remove('hidden');
     loaderAscii.textContent = '\n(>_<)\n\n';
     loaderText.textContent = 'Server đang khởi động lại. Chờ 3 phút...';
-    statusText.textContent = '(-_-) zZz';
-    statusText.title = `Resetting: ${server.name}`;
+    statusText.textContent = `Đang reset: ${server.name}`;
     document.getElementById('terminal-title').textContent = server.name;
 
     setTimeout(() => {
@@ -219,8 +217,7 @@ function connectToTerminalServer(server) {
         return;
     }
   
-    statusText.textContent = '(o_o)';
-    statusText.title = `Connecting to ${server.name}...`;
+    statusText.textContent = `Đang kết nối...`;
     document.getElementById('terminal-title').textContent = server.name;
     showConnectionAnimation(server);
 
@@ -228,19 +225,18 @@ function connectToTerminalServer(server) {
 
     currentSocket.on('connect', () => {
         terminalLoader.classList.add('hidden');
-        statusText.textContent = '(⌐■_■)';
-        statusText.title = `Connected to ${server.name}`;
-        term.focus();
-        // On reconnection, resubscribe to the active terminal session
+        statusText.textContent = `Đã kết nối: ${server.name}`;
+        // On reconnection, re-select the active terminal session if one exists
+        // This ensures the terminal output is resynchronized.
         if (activeTerminalSessionId) {
             currentSocket.emit('switch-session', activeTerminalSessionId);
         }
+        term.focus();
     });
 
     currentSocket.on('disconnect', () => {
         if (activeServerUid === server.uid) {
-            statusText.textContent = '(x_x)';
-            statusText.title = 'Disconnected. Reconnecting...';
+            statusText.textContent = 'Mất kết nối';
             term.write('\r\n\x1b[31m⚠️ Mất kết nối.\x1b[0m\r\n');
         }
     });
@@ -388,6 +384,7 @@ function handleFormSubmit(event) {
     hideModal();
 }
 
+
 // --- UPTIME MONITOR LOGIC (CLIENT-SIDE) ---
 const uptimeModalOverlay = document.getElementById('uptime-modal-overlay');
 const uptimeForm = document.getElementById('uptime-form');
@@ -485,8 +482,8 @@ function initializeDashboard() {
   adminSocket.on('connect', () => {
     // Re-initialize the currently selected local service upon reconnection
     const activeService = allServices.find(s => s.uid === activeServerUid);
-    if (activeService?.isLocal) {
-        if (activeService.uid === 'internal-uptime') initializeUptimeMonitor();
+    if (activeService?.isLocal && activeService.uid === 'internal-uptime') {
+        initializeUptimeMonitor();
     }
   });
   adminSocket.on('uptime:full_list', renderUptimeList);
