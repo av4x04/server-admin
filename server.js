@@ -21,68 +21,6 @@ app.get('*', (req, res) => {
 });
 
 
-// --- SYSTEM STATUS LOGIC (SERVER-SIDE) ---
-let statusInterval = null;
-const statusSubscribers = new Set();
-let lastCpuUsage = getCpuUsage(); // Initial reading
-
-function getCpuUsage() {
-    let totalIdle = 0, totalTick = 0;
-    const cpus = os.cpus();
-    for (const cpu of cpus) {
-        for (const type in cpu.times) {
-            totalTick += cpu.times[type];
-        }
-        totalIdle += cpu.times.idle;
-    }
-    return { idle: totalIdle / cpus.length, total: totalTick / cpus.length };
-}
-
-function calculateCpuPercentage(start, end) {
-    const idleDifference = end.idle - start.idle;
-    const totalDifference = end.total - start.total;
-    if (totalDifference === 0) return 0;
-    const percentage = 100 - (100 * idleDifference / totalDifference);
-    return Math.max(0, Math.min(100, percentage));
-}
-
-function startSystemStatusUpdates() {
-    if (statusInterval) return; // Already running
-    console.log('Starting system status updates.');
-    statusInterval = setInterval(() => {
-        if (statusSubscribers.size === 0) {
-            stopSystemStatusUpdates();
-            return;
-        }
-
-        const newCpuUsage = getCpuUsage();
-        const cpuPercent = calculateCpuPercentage(lastCpuUsage, newCpuUsage);
-        lastCpuUsage = newCpuUsage;
-
-        const data = {
-            memory: {
-                process: process.memoryUsage().rss, // Process RSS in bytes
-                total: os.totalmem(),
-                free: os.freemem(),
-            },
-            cpu: cpuPercent.toFixed(2),
-            uptime: process.uptime(), // in seconds
-            platform: os.platform(),
-            nodeVersion: process.version,
-        };
-        io.to('system-status-room').emit('system-status:update', data);
-    }, 2000); // Update every 2 seconds
-}
-
-function stopSystemStatusUpdates() {
-    if (statusInterval) {
-        console.log('Stopping system status updates.');
-        clearInterval(statusInterval);
-        statusInterval = null;
-    }
-}
-
-
 // --- UPTIME MONITOR LOGIC (SERVER-SIDE) ---
 
 const HARDCODED_UPTIME_SITES = [
@@ -166,11 +104,6 @@ io.on('connection', (socket) => {
   
   socket.on('disconnect', () => {
     console.log(`Admin UI client disconnected: ${socket.id}`);
-    // Clean up from system status subscriptions
-    statusSubscribers.delete(socket.id);
-    if (statusSubscribers.size === 0) {
-        stopSystemStatusUpdates();
-    }
   });
 
   // --- Uptime Event Handlers ---
@@ -212,23 +145,6 @@ io.on('connection', (socket) => {
           delete statuses[uid];
           io.emit('uptime:site_removed', uid);
       }
-  });
-
-  // --- System Status Handlers ---
-  socket.on('system-status:subscribe', () => {
-    socket.join('system-status-room');
-    statusSubscribers.add(socket.id);
-    if (!statusInterval) {
-        startSystemStatusUpdates();
-    }
-  });
-
-  socket.on('system-status:unsubscribe', () => {
-    socket.leave('system-status-room');
-    statusSubscribers.delete(socket.id);
-    if (statusSubscribers.size === 0) {
-        stopSystemStatusUpdates();
-    }
   });
 });
 
