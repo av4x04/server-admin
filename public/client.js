@@ -30,13 +30,6 @@ const LOCAL_SERVICES = [
         description: 'Giám sát trạng thái website',
         isLocal: true,
         icon: 'fas fa-heartbeat'
-    },
-    {
-        uid: 'internal-system-status',
-        name: 'System Status',
-        description: 'Giám sát tài nguyên server admin',
-        isLocal: true,
-        icon: 'fas fa-tachometer-alt'
     }
 ];
 
@@ -92,7 +85,6 @@ const terminalTabsContainer = document.getElementById('terminal-tabs-container')
 const allViews = document.querySelectorAll('.view-container');
 const terminalView = document.getElementById('terminal-view');
 const uptimeView = document.getElementById('uptime-view');
-const systemStatusView = document.getElementById('system-status-view');
 
 function switchToView(viewId) {
     allViews.forEach(view => {
@@ -170,11 +162,6 @@ function renderServerList() {
 function selectServer(service) {
     if (activeServerUid === service.uid) return;
 
-    // Unsubscribe from any previous local service subscriptions
-    if (adminSocket && activeServerUid && allServices.find(s => s.uid === activeServerUid)?.isLocal) {
-        adminSocket.emit('system-status:unsubscribe');
-    }
-
     activeServerUid = service.uid;
     if (currentSocket) currentSocket.disconnect();
     currentSocket = null;
@@ -190,12 +177,9 @@ function selectServer(service) {
         terminalLoader.classList.add('hidden');
         if (service.uid === 'internal-uptime') {
             switchToView('uptime-view');
-            statusText.textContent = 'Uptime Monitor';
+            statusText.textContent = '(^‿^)';
+            statusText.title = 'Uptime Monitor';
             initializeUptimeMonitor();
-        } else if (service.uid === 'internal-system-status') {
-            switchToView('system-status-view');
-            statusText.textContent = 'System Status';
-            initializeSystemStatus();
         }
     } else {
         switchToView('terminal-view');
@@ -218,7 +202,8 @@ function showResettingOverlay(server, duration) {
     terminalLoader.classList.remove('hidden');
     loaderAscii.textContent = '\n(>_<)\n\n';
     loaderText.textContent = 'Server đang khởi động lại. Chờ 3 phút...';
-    statusText.textContent = `Đang reset: ${server.name}`;
+    statusText.textContent = '(-_-) zZz';
+    statusText.title = `Resetting: ${server.name}`;
     document.getElementById('terminal-title').textContent = server.name;
 
     setTimeout(() => {
@@ -234,7 +219,8 @@ function connectToTerminalServer(server) {
         return;
     }
   
-    statusText.textContent = `Đang kết nối...`;
+    statusText.textContent = '(o_o)';
+    statusText.title = `Connecting to ${server.name}...`;
     document.getElementById('terminal-title').textContent = server.name;
     showConnectionAnimation(server);
 
@@ -242,13 +228,19 @@ function connectToTerminalServer(server) {
 
     currentSocket.on('connect', () => {
         terminalLoader.classList.add('hidden');
-        statusText.textContent = `Đã kết nối: ${server.name}`;
+        statusText.textContent = '(⌐■_■)';
+        statusText.title = `Connected to ${server.name}`;
         term.focus();
+        // On reconnection, resubscribe to the active terminal session
+        if (activeTerminalSessionId) {
+            currentSocket.emit('switch-session', activeTerminalSessionId);
+        }
     });
 
     currentSocket.on('disconnect', () => {
         if (activeServerUid === server.uid) {
-            statusText.textContent = 'Mất kết nối';
+            statusText.textContent = '(x_x)';
+            statusText.title = 'Disconnected. Reconnecting...';
             term.write('\r\n\x1b[31m⚠️ Mất kết nối.\x1b[0m\r\n');
         }
     });
@@ -396,37 +388,6 @@ function handleFormSubmit(event) {
     hideModal();
 }
 
-// --- SYSTEM STATUS LOGIC (CLIENT-SIDE) ---
-function initializeSystemStatus() {
-    if (adminSocket && adminSocket.connected) {
-        adminSocket.emit('system-status:subscribe');
-    }
-}
-
-function updateSystemStatusView(data) {
-    // Memory
-    const memUsed = data.memory.total - data.memory.free;
-    const memTotal = data.memory.total;
-    const memProc = data.memory.process;
-    const memPercent = (memUsed / memTotal) * 100;
-    
-    document.getElementById('mem-progress').style.width = `${memPercent.toFixed(2)}%`;
-    document.getElementById('mem-text').textContent = `${(memUsed / 1024 / 1024).toFixed(1)} MB / ${(memTotal / 1024 / 1024).toFixed(1)} MB`;
-    document.getElementById('mem-proc-text').textContent = `Process: ${(memProc / 1024 / 1024).toFixed(1)} MB`;
-
-    // CPU
-    const cpuPercent = parseFloat(data.cpu);
-    document.getElementById('cpu-arc-fg').style.strokeDasharray = `${cpuPercent.toFixed(1)}, 100`;
-    document.getElementById('cpu-text').textContent = `${cpuPercent.toFixed(1)} %`;
-
-    // Info
-    const uptime = new Date(data.uptime * 1000).toISOString().substr(11, 8);
-    document.getElementById('uptime-text').textContent = uptime;
-    document.getElementById('node-version-text').textContent = data.nodeVersion;
-    document.getElementById('platform-text').textContent = data.platform;
-}
-
-
 // --- UPTIME MONITOR LOGIC (CLIENT-SIDE) ---
 const uptimeModalOverlay = document.getElementById('uptime-modal-overlay');
 const uptimeForm = document.getElementById('uptime-form');
@@ -526,7 +487,6 @@ function initializeDashboard() {
     const activeService = allServices.find(s => s.uid === activeServerUid);
     if (activeService?.isLocal) {
         if (activeService.uid === 'internal-uptime') initializeUptimeMonitor();
-        if (activeService.uid === 'internal-system-status') initializeSystemStatus();
     }
   });
   adminSocket.on('uptime:full_list', renderUptimeList);
@@ -540,7 +500,6 @@ function initializeDashboard() {
       if (uptimeViewContent.childElementCount === 0) renderUptimeList({ sites: [], statuses: {} });
   });
   adminSocket.on('uptime:update', (updateData) => updateUptimeCard(updateData.uid, updateData));
-  adminSocket.on('system-status:update', updateSystemStatusView);
   
   loadServers();
   renderServerList();
