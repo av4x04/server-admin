@@ -60,7 +60,7 @@ setInterval(() => {
             percent: (usedMem / totalMem) * 100,
         },
         info: {
-            hostname: os.hostname(),
+            hostname: 'av4x04@admin',
             platform: os.platform(),
             release: os.release(),
             nodeVersion: process.version,
@@ -146,7 +146,7 @@ io.on('connection', (socket) => {
         cpus: cpus,
         ram: { total: totalMem, used: usedMem, percent: (usedMem / totalMem) * 100 },
         info: {
-            hostname: os.hostname(), platform: os.platform(), release: os.release(),
+            hostname: 'av4x04@admin', platform: os.platform(), release: os.release(),
             nodeVersion: process.version, uptime: os.uptime(),
         }
     });
