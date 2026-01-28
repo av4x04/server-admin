@@ -43,7 +43,7 @@ const LOCAL_SERVICES = [
 // Define hardcoded servers that cannot be deleted
 const HARDCODED_SERVERS = [
     {
-        uid: 'hardcoded-1', name: 'Terminal-v1', url: 'https://server-terminal-v1-rvg9.onrender.com',
+        uid: 'hardcoded-1', name: 'Terminal-v1', url: 'https://server-terminal-v1-m4pg.onrender.com',
         description: 'Server-Terminal 🚀', deployHookUrl: 'https://api.render.com/deploy/srv-d5t1h4sr85hc73durba0?key=QxGp3s79mLg',
         isHardcoded: true
     },
@@ -55,7 +55,7 @@ const HARDCODED_SERVERS = [
     },
 
     {
-        uid: 'hardcoded-3', name: 'Terminal-v3', url: 'https://server-terminal-v3-eqdx.onrender.com',
+        uid: 'hardcoded-3', name: 'Terminal-v3', url: 'https://server-terminal-v3-iuxk.onrender.com',
         description: 'Server-Terminal 🚀', deployHookUrl: 'https://api.render.com/deploy/srv-d5t1qp49c44c739l2r6g?key=2HtI7SXQiSA',
         isHardcoded: true
     },
