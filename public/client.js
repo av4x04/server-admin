@@ -44,7 +44,7 @@ const LOCAL_SERVICES = [
 const HARDCODED_SERVERS = [
     {
         uid: 'hardcoded-1', name: 'Terminal-v1', url: 'https://server-terminal-v1-rvg9.onrender.com',
-        description: 'Server-Terminal 🚀', deployHookUrl: 'https://api.render.com/deploy/srv-d3j6j0ffte5s73an1ch0?key=-_PhfYyBRnI',
+        description: 'Server-Terminal 🚀', deployHookUrl: 'https://api.render.com/deploy/srv-d5t1h4sr85hc73durba0?key=QxGp3s79mLg',
         isHardcoded: true
     },
     
@@ -56,13 +56,13 @@ const HARDCODED_SERVERS = [
 
     {
         uid: 'hardcoded-3', name: 'Terminal-v3', url: 'https://server-terminal-v3-eqdx.onrender.com',
-        description: 'Server-Terminal 🚀', deployHookUrl: 'https://api.render.com/deploy/srv-d3jqk995pdvs73elek5g?key=v7yihKTBnaE',
+        description: 'Server-Terminal 🚀', deployHookUrl: 'https://api.render.com/deploy/srv-d5t1qp49c44c739l2r6g?key=2HtI7SXQiSA',
         isHardcoded: true
     },
 
     {
         uid: 'hardcoded-4', name: 'Terminal-v4', url: 'https://server-terminal-v4.onrender.com',
-        description: 'Server-Terminal 🚀', deployHookUrl: 'https://api.render.com/deploy/srv-d3jt996uk2gs739e998g?key=N-8qwaYuFaU',
+        description: 'Server-Terminal 🚀', deployHookUrl: 'https://api.render.com/deploy/srv-d5t230718n1s73fvei0g?key=-6ymKLG698o',
         isHardcoded: true
     }
 ];
