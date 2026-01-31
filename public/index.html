@@ -743,9 +743,14 @@
             <div class="status-dot" id="status-dot"></div>
             <div id="status-text">Connecting...</div>
           </div>
-          <div class="controls">
-            <button class="btn ghost" onclick="toggleFullscreen()" title="Fullscreen Mode">
-              <i class="fas fa-expand"></i> Fullscreen
+                  <div class="controls">
+                    <div style="display:flex;gap:4px;background:rgba(255,255,255,0.05);padding:4px;border-radius:8px;border:1px solid var(--border);">
+                       <input type="number" id="port-input" placeholder="Port" style="background:transparent;border:none;color:white;padding:4px 8px;width:70px;font-family:inherit;outline:none;" onkeydown="if(event.key==='Enter') openPort()">
+                       <button class="btn" onclick="openPort()" style="padding:4px 10px;margin:0;box-shadow:none;border:none;" title="Open Port">
+                         <i class="fas fa-external-link-alt"></i>
+                       </button>
+                    </div>
+                    <button class="btn ghost" onclick="toggleFullscreen()" title="Fullscreen Mode">              <i class="fas fa-expand"></i> Fullscreen
             </button>
           </div>
         </div>
@@ -920,5 +925,17 @@
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xterm@4/lib/xterm.js"></script>
     <script src="client.js"></script>
+    <script>
+      function openPort() {
+        const portInput = document.getElementById('port-input');
+        const port = portInput.value.trim();
+        if (port) {
+            const url = `${window.location.origin}/p/${port}/`;
+            window.open(url, '_blank');
+        } else {
+            alert('Please enter a port number (e.g. 3000)');
+        }
+      }
+    </script>
   </body>
   </html>

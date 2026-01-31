@@ -25,6 +25,15 @@ const SERVER_STORAGE_KEY = 'admin-servers-list';
 // Define local/internal services
 const LOCAL_SERVICES = [
     {
+        uid: 'local-terminal',
+        name: 'Local Terminal (Root)',
+        description: 'Terminal của server này',
+        isLocal: false, // Treat as remote so it uses connectToTerminalServer logic
+        url: window.location.origin, // Connect to self
+        icon: 'fas fa-terminal',
+        isHardcoded: true
+    },
+    {
         uid: 'internal-system',
         name: 'System Status',
         description: 'Giám sát tài nguyên admin',
