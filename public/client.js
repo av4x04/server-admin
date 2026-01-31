@@ -1,16 +1,14 @@
 // server-admin/public/client.js
 
+// Pure Admin Client - No Local Terminal Logic inside Client
+// But supports opening remote ports for monitored servers
+
 const term = new Terminal({
   theme: {
     background: 'transparent',
     foreground: '#e6eef2',
     cursor: '#00d084',
     selection: 'rgba(0, 208, 132, 0.3)',
-    black: '#0b0b0c', red: '#ff7b7b', green: '#7ef3b2', yellow: '#ffd27a',
-    blue: '#75d1ff', magenta: '#c792ea', cyan: '#89ddff', white: '#e6eef2',
-    brightBlack: '#8b8f92', brightRed: '#ff9e9e', brightGreen: '#a1f8cd',
-    brightYellow: '#ffe5a8', brightBlue: '#a4e1ff', brightMagenta: '#e4b9ff',
-    brightCyan: '#b8edff', brightWhite: '#ffffff',
   },
   fontSize: 14,
   fontFamily: 'Menlo, "DejaVu Sans Mono", Consolas, "Lucida Console", monospace',
@@ -22,17 +20,8 @@ term.open(document.getElementById('terminal'));
 const ICONS = ['fas fa-server', 'fas fa-database', 'fas fa-network-wired', 'fas fa-laptop-code'];
 const SERVER_STORAGE_KEY = 'admin-servers-list';
 
-// Define local/internal services
+// Define local/internal services (Just Monitoring)
 const LOCAL_SERVICES = [
-    {
-        uid: 'local-terminal',
-        name: 'Local Terminal (Root)',
-        description: 'Terminal của server này',
-        isLocal: false, // Treat as remote so it uses connectToTerminalServer logic
-        url: window.location.origin, // Connect to self
-        icon: 'fas fa-terminal',
-        isHardcoded: true
-    },
     {
         uid: 'internal-system',
         name: 'System Status',
@@ -49,26 +38,23 @@ const LOCAL_SERVICES = [
     }
 ];
 
-// Define hardcoded servers that cannot be deleted
+// Define hardcoded servers
 const HARDCODED_SERVERS = [
     {
         uid: 'hardcoded-1', name: 'Terminal-v1', url: 'https://server-terminal-v1-m4pg.onrender.com',
         description: 'Server-Terminal 🚀', deployHookUrl: 'https://api.render.com/deploy/srv-d5t1h4sr85hc73durba0?key=QxGp3s79mLg',
         isHardcoded: true
     },
-    
     {
         uid: 'hardcoded-2', name: 'Terminal-v2', url: 'https://server-terminal-v2-lil8.onrender.com',
         description: 'Server-Terminal 🚀', deployHookUrl: 'https://api.render.com/deploy/srv-d3j6ugjipnbc73ekvm0g?key=EDEEiKz3oH8',
         isHardcoded: true
     },
-
     {
         uid: 'hardcoded-3', name: 'Terminal-v3', url: 'https://server-terminal-v3-iuxk.onrender.com',
         description: 'Server-Terminal 🚀', deployHookUrl: 'https://api.render.com/deploy/srv-d5t1qp49c44c739l2r6g?key=2HtI7SXQiSA',
         isHardcoded: true
     },
-
     {
         uid: 'hardcoded-4', name: 'Terminal-v4', url: 'https://server-terminal-v4.onrender.com',
         description: 'Server-Terminal 🚀', deployHookUrl: 'https://api.render.com/deploy/srv-d5t230718n1s73fvei0g?key=-6ymKLG698o',
@@ -76,14 +62,14 @@ const HARDCODED_SERVERS = [
     }
 ];
 
-let adminSocket; // Socket for admin panel features like Uptime
-let currentSocket = null;
+let adminSocket;
+let currentSocket = null; // Used for remote terminal connection
 let activeServerUid = null;
-let allServices = []; // Combined list of local services and remote servers
+let allServices = [];
 let userServers = [];
-const resettingServers = {}; // State to track resetting servers: { [uid]: endTime }
+const resettingServers = {};
 
-// Terminal multi-session state
+// Terminal State
 let terminalSessions = new Map();
 let activeTerminalSessionId = null;
 
@@ -99,10 +85,6 @@ const terminalTabsContainer = document.getElementById('terminal-tabs-container')
 
 // Views
 const allViews = document.querySelectorAll('.view-container');
-const terminalView = document.getElementById('terminal-view');
-const uptimeView = document.getElementById('uptime-view');
-const systemView = document.getElementById('system-view');
-
 
 function switchToView(viewId) {
     allViews.forEach(view => {
@@ -115,7 +97,6 @@ function loadServers() {
     try {
         userServers = storedUserServers ? JSON.parse(storedUserServers) : [];
     } catch (e) {
-        console.error("Error parsing user servers from localStorage", e);
         userServers = [];
     }
     allServices = [...LOCAL_SERVICES, ...HARDCODED_SERVERS, ...userServers];
@@ -132,8 +113,7 @@ function renderServerList() {
         const serverElement = document.createElement('div');
         serverElement.className = 'tab-item';
         if (service.uid === activeServerUid) serverElement.classList.add('active');
-        serverElement.dataset.uid = service.uid;
-
+        
         let actionsHtml = !service.isLocal ? `
             <div class="tab-actions">
                 <button class="options-btn" title="Tùy chọn"><i class="fas fa-ellipsis-v"></i></button>
@@ -147,7 +127,7 @@ function renderServerList() {
             <div class="icon-circle"><i class="${iconClass}"></i></div>
             <div class="tab-meta">
                 <div class="tab-name">${service.name}</div>
-                <div class="tab-sub">${service.description || service.url}</div>
+                <div class="tab-sub">${service.description || service.url || ''}</div>
             </div>
             ${actionsHtml}`;
         
@@ -181,10 +161,11 @@ function selectServer(service) {
     if (activeServerUid === service.uid) return;
 
     activeServerUid = service.uid;
-    if (currentSocket) currentSocket.disconnect();
-    currentSocket = null;
+    if (currentSocket) {
+        currentSocket.disconnect();
+        currentSocket = null;
+    }
     
-    // Reset terminal session state
     terminalSessions.clear();
     activeTerminalSessionId = null;
     renderTerminalTabs();
@@ -210,22 +191,44 @@ function selectServer(service) {
     }
 }
 
+// Logic to Open Port on REMOTE Server
+window.openPort = function() {
+    const portInput = document.getElementById('port-input');
+    const port = portInput.value.trim();
+    
+    if (!port) {
+        alert('Please enter a port number.');
+        return;
+    }
+
+    const activeService = allServices.find(s => s.uid === activeServerUid);
+    
+    if (activeService && !activeService.isLocal && activeService.url) {
+        // Construct URL for the Remote Server
+        // e.g., https://server-terminal-v1.../p/3000/
+        const url = `${activeService.url}/p/${port}/`;
+        window.open(url, '_blank');
+    } else {
+        alert('Please select a remote server (Terminal) first.');
+    }
+};
+
 function showConnectionAnimation(server) {
     term.reset();
     terminalLoader.classList.remove('hidden');
     loaderAscii.textContent = '\n(>_<)\n\n';
-    loaderText.textContent = `Đang kết nối đến ${server.name}...`;
+    loaderText.textContent = `Connecting to ${server.name}...`;
 }
 
 function showResettingOverlay(server, duration) {
-    if (currentSocket && currentSocket.connected) currentSocket.disconnect();
+    if (currentSocket) currentSocket.disconnect();
     currentSocket = null;
     term.reset();
     switchToView('terminal-view');
     terminalLoader.classList.remove('hidden');
     loaderAscii.textContent = '\n(>_<)\n\n';
-    loaderText.textContent = 'Server đang khởi động lại. Chờ 3 phút...';
-    statusText.textContent = `Đang reset: ${server.name}`;
+    loaderText.textContent = 'Server rebooting... Wait 3 mins';
+    statusText.textContent = `Resetting: ${server.name}`;
     document.getElementById('terminal-title').textContent = server.name;
 
     setTimeout(() => {
@@ -241,17 +244,16 @@ function connectToTerminalServer(server) {
         return;
     }
   
-    statusText.textContent = `Đang kết nối...`;
+    statusText.textContent = `Connecting...`;
     document.getElementById('terminal-title').textContent = server.name;
     showConnectionAnimation(server);
 
+    // Connect to the REMOTE server via Socket.IO
     currentSocket = io(server.url, { transports: ['websocket'] });
 
     currentSocket.on('connect', () => {
         terminalLoader.classList.add('hidden');
-        statusText.textContent = `Đã kết nối: ${server.name}`;
-        // On reconnection, re-select the active terminal session if one exists
-        // This ensures the terminal output is resynchronized.
+        statusText.textContent = `Connected: ${server.name}`;
         if (activeTerminalSessionId) {
             currentSocket.emit('switch-session', activeTerminalSessionId);
         }
@@ -260,8 +262,8 @@ function connectToTerminalServer(server) {
 
     currentSocket.on('disconnect', () => {
         if (activeServerUid === server.uid) {
-            statusText.textContent = 'Mất kết nối';
-            term.write('\r\n\x1b[31m⚠️ Mất kết nối.\x1b[0m\r\n');
+            statusText.textContent = 'Disconnected';
+            term.write('\r\n\x1b[31m⚠️ Disconnected from remote server.\x1b[0m\r\n');
         }
     });
   
@@ -272,7 +274,7 @@ function connectToTerminalServer(server) {
         term.write(history);
     });
 
-    // Multi-session listeners
+    // Multi-session
     currentSocket.on('sessions-list', (sessionList) => {
         terminalSessions.clear();
         sessionList.forEach(s => terminalSessions.set(s.id, s));
@@ -292,16 +294,14 @@ function connectToTerminalServer(server) {
 
     currentSocket.on('session-closed', ({ id }) => {
         const wasActive = (id === activeTerminalSessionId);
-        if (terminalSessions.has(id)) {
-            terminalSessions.delete(id);
-            if (wasActive && terminalSessions.size > 0) {
-                switchTerminalSession(terminalSessions.keys().next().value);
-            } else if (terminalSessions.size === 0) {
+        terminalSessions.delete(id);
+        if (wasActive && terminalSessions.size > 0) {
+            switchTerminalSession(terminalSessions.keys().next().value);
+        } else {
+            renderTerminalTabs();
+            if (terminalSessions.size === 0) {
                 activeTerminalSessionId = null;
                 term.reset();
-                renderTerminalTabs();
-            } else {
-                renderTerminalTabs();
             }
         }
     });
@@ -309,12 +309,12 @@ function connectToTerminalServer(server) {
 
 function renderTerminalTabs() {
     terminalTabsContainer.innerHTML = '';
+    // If local service selected, do nothing
     if (allServices.find(s => s.uid === activeServerUid)?.isLocal) return;
 
     terminalSessions.forEach(session => {
         const tab = document.createElement('button');
         tab.className = 'tab-btn';
-        tab.dataset.sessionId = session.id;
         tab.textContent = session.name;
         if (session.id === activeTerminalSessionId) tab.classList.add('active');
 
@@ -324,7 +324,7 @@ function renderTerminalTabs() {
             tab.appendChild(closeBtn);
             closeBtn.onclick = e => {
                 e.stopPropagation();
-                if (confirm(`Bạn có chắc muốn đóng "${session.name}"?`)) {
+                if (confirm(`Close "${session.name}"?`)) {
                     currentSocket.emit('close-session', session.id);
                 }
             };
@@ -335,7 +335,6 @@ function renderTerminalTabs() {
 
     const addBtn = document.createElement('button');
     addBtn.className = 'add-tab-btn';
-    addBtn.title = 'Phiên mới';
     addBtn.textContent = '+';
     addBtn.onclick = () => currentSocket.emit('create-session');
     terminalTabsContainer.appendChild(addBtn);
@@ -343,7 +342,6 @@ function renderTerminalTabs() {
 
 function switchTerminalSession(sessionId) {
     if (!terminalSessions.has(sessionId) || sessionId === activeTerminalSessionId) return;
-    
     activeTerminalSessionId = sessionId;
     currentSocket.emit('switch-session', sessionId);
     term.reset();
@@ -353,48 +351,42 @@ function switchTerminalSession(sessionId) {
 
 async function handleReset(server) {
     if (!server.deployHookUrl) {
-        alert(`Server '${server.name}' chưa được cấu hình Deploy Hook URL.`);
+        alert('Missing Deploy Hook URL.');
         return;
     }
-    
     if (activeServerUid !== server.uid) selectServer(server);
-    term.write(`\r\n\x1b[33m[Reset] Đang gửi lệnh reset đến '${server.name}'...\x1b[0m\r\n`);
+    term.write(`\r\n\x1b[33m[Reset] Sending signal to '${server.name}'...\x1b[0m\r\n`);
     
     try {
         await fetch(server.deployHookUrl, { method: 'POST', mode: 'no-cors' });
-        term.write(`\r\n\x1b[32m[Reset] Tín hiệu đã được gửi. Server sẽ khởi động lại.\x1b[0m\r\n`);
-        const RESET_DURATION = 180000; // 3 minutes
+        term.write(`\r\n\x1b[32m[Reset] Signal sent.\x1b[0m\r\n`);
+        const RESET_DURATION = 180000;
         resettingServers[server.uid] = Date.now() + RESET_DURATION;
         if (activeServerUid === server.uid) showResettingOverlay(server, RESET_DURATION);
     } catch (error) {
-        term.write(`\r\n\x1b[31m[Lỗi Reset] Không thể gửi lệnh: ${error.message}\x1b[0m\r\n`);
+        term.write(`\r\n\x1b[31m[Error] ${error.message}\x1b[0m\r\n`);
     }
 }
 
-function handleDelete(serverToDelete) {
-    if (serverToDelete.isHardcoded || !confirm(`Bạn có chắc muốn xóa '${serverToDelete.name}'?`)) return;
-    userServers = userServers.filter(s => s.uid !== serverToDelete.uid);
-    saveServers();
-    loadServers();
-    if (activeServerUid === serverToDelete.uid) {
-        selectServer(allServices[0]);
+function handleDelete(server) {
+    if (confirm(`Delete '${server.name}'?`)) {
+        userServers = userServers.filter(s => s.uid !== server.uid);
+        saveServers();
+        loadServers();
+        if (activeServerUid === server.uid) selectServer(allServices[0]);
+        renderServerList();
     }
-    renderServerList();
 }
 
 function showModal() {
     serverForm.reset();
-    document.getElementById('server-id').value = '';
-    document.getElementById('modal-title').innerHTML = 'Thêm Server Mới <i class="fas fa-plus-circle"></i>';
+    document.getElementById('modal-title').innerText = 'Add Server';
     modalOverlay.classList.add('show');
 }
+function hideModal() { modalOverlay.classList.remove('show'); }
 
-function hideModal() {
-    modalOverlay.classList.remove('show');
-}
-
-function handleFormSubmit(event) {
-    event.preventDefault();
+function handleFormSubmit(e) {
+    e.preventDefault();
     userServers.push({
         uid: 'server_' + Date.now(),
         name: document.getElementById('server-name').value,
@@ -408,219 +400,123 @@ function handleFormSubmit(event) {
     hideModal();
 }
 
-
-// --- UPTIME MONITOR LOGIC (CLIENT-SIDE) ---
+// Uptime UI Logic
 const uptimeModalOverlay = document.getElementById('uptime-modal-overlay');
-const uptimeForm = document.getElementById('uptime-form');
 const uptimeViewContent = document.getElementById('uptime-view-content');
 
 function initializeUptimeMonitor() {
     if (adminSocket && adminSocket.connected) {
-        uptimeViewContent.innerHTML = `<div class="empty-uptime"><i class="fas fa-spinner fa-spin"></i><p>Đang tải dữ liệu...</p></div>`;
+        uptimeViewContent.innerHTML = `<div class="empty-uptime"><i class="fas fa-spinner fa-spin"></i><p>Loading...</p></div>`;
         adminSocket.emit('uptime:subscribe');
-    } else {
-        uptimeViewContent.innerHTML = `<div class="empty-uptime"><i class="fas fa-exclamation-triangle"></i><p>Không thể kết nối server admin.</p></div>`;
     }
 }
 
 function renderUptimeList(state) {
     uptimeViewContent.innerHTML = '';
-    if (!state.sites || state.sites.length === 0) {
-        uptimeViewContent.innerHTML = `<div class="empty-uptime"><i class="fas fa-satellite-dish"></i><p>Chưa có website nào được theo dõi.</p></div>`;
-        return;
-    }
+    if (!state.sites || state.sites.length === 0) return;
     state.sites.forEach(site => {
-        const card = createUptimeCard(site);
+        const card = document.createElement('div');
+        card.className = 'uptime-card';
+        card.dataset.uid = site.uid;
+        card.innerHTML = `
+            <div class="uptime-header">
+                <div class="uptime-title">${site.name}</div>
+                <div class="uptime-status pending">Pending</div>
+            </div>
+            <div class="uptime-url">${site.url}</div>
+            <div class="uptime-meta">
+                <span class="uptime-response">- ms</span>
+                ${!site.isHardcoded ? `<button class="btn ghost danger uptime-del-btn" style="font-size:10px;padding:2px 5px">Xóa</button>` : ''}
+            </div>`;
+        
+        if(!site.isHardcoded) {
+            card.querySelector('.uptime-del-btn').addEventListener('click', () => adminSocket.emit('uptime:delete_site', site.uid));
+        }
+        
         uptimeViewContent.appendChild(card);
         if (state.statuses[site.uid]) updateUptimeCard(site.uid, state.statuses[site.uid]);
     });
 }
 
-function createUptimeCard(site) {
-    const card = document.createElement('div');
-    card.className = 'uptime-card';
-    card.dataset.uid = site.uid;
-    const deleteBtnHtml = !site.isHardcoded ? `<button class="btn ghost danger uptime-delete-btn" style="padding: 4px 8px; font-size: 12px;">Xóa</button>` : '';
-    card.innerHTML = `
-        <div class="uptime-header">
-            <div class="uptime-title">${site.name} ${site.isHardcoded ? '<i class="fas fa-lock" style="font-size: 10px; color: var(--muted);"></i>' : ''}</div>
-            <div class="uptime-status pending">Pending...</div>
-        </div>
-        <div class="uptime-url">${site.url}</div>
-        <div class="uptime-meta">
-            <span>Response: <span class="uptime-response">- ms</span></span>
-            ${deleteBtnHtml}
-        </div>`;
-    if (!site.isHardcoded) {
-        card.querySelector('.uptime-delete-btn').addEventListener('click', e => {
-            e.stopPropagation();
-            deleteUptimeSite(site.uid);
-        });
-    }
-    return card;
-}
-
-function updateUptimeCard(uid, statusData) {
+function updateUptimeCard(uid, data) {
     const card = document.querySelector(`.uptime-card[data-uid="${uid}"]`);
     if (!card) return;
     const statusEl = card.querySelector('.uptime-status');
-    const responseEl = card.querySelector('.uptime-response');
-    statusEl.classList.remove('up', 'down', 'pending');
-    switch(statusData.status) {
-        case 'up':
-            statusEl.classList.add('up'); statusEl.textContent = 'Up';
-            responseEl.textContent = `${statusData.responseTime} ms`; break;
-        case 'down':
-            statusEl.classList.add('down'); statusEl.textContent = 'Down';
-            responseEl.textContent = 'N/A'; break;
-        default:
-            statusEl.classList.add('pending'); statusEl.textContent = 'Checking...';
-            responseEl.textContent = '- ms'; break;
-    }
+    const respEl = card.querySelector('.uptime-response');
+    
+    statusEl.className = `uptime-status ${data.status}`;
+    statusEl.textContent = data.status === 'up' ? 'Up' : 'Down';
+    respEl.textContent = data.responseTime > -1 ? `${data.responseTime}ms` : 'N/A';
 }
 
-function showUptimeModal() { uptimeForm.reset(); uptimeModalOverlay.classList.add('show'); }
+function showUptimeModal() { document.getElementById('uptime-form').reset(); uptimeModalOverlay.classList.add('show'); }
 function hideUptimeModal() { uptimeModalOverlay.classList.remove('show'); }
 
-function handleUptimeFormSubmit(e) {
-    e.preventDefault();
-    adminSocket.emit('uptime:add_site', {
-        name: document.getElementById('uptime-name').value,
-        url: document.getElementById('uptime-url').value,
-    });
-    hideUptimeModal();
-}
-
-function deleteUptimeSite(uid) {
-    if (!confirm('Bạn có chắc muốn ngừng theo dõi website này?')) return;
-    adminSocket.emit('uptime:delete_site', uid);
-}
-
-// --- SYSTEM STATUS LOGIC (CLIENT-SIDE) ---
-let cpuHistory = [];
-const MAX_HISTORY_POINTS = 40; // 40 points * 1.5s interval = 60s of history
+// System UI Logic
 const cpuChartPath = document.getElementById('cpu-chart-path');
 const cpuCoresContainer = document.getElementById('cpu-cores-container');
+let cpuHistory = [];
 
 function updateSystemStats(stats) {
-    // Update CPU
     document.getElementById('cpu-usage-text').textContent = `${stats.cpu.toFixed(1)}%`;
-    
-    // Update CPU Chart
     cpuHistory.push(stats.cpu);
-    if (cpuHistory.length > MAX_HISTORY_POINTS) {
-        cpuHistory.shift();
-    }
-    const pathData = cpuHistory.map((p, i) => {
-        const x = (i / (MAX_HISTORY_POINTS - 1)) * 100;
-        const y = 30 - (p / 100) * 30; // Invert Y-axis
-        return `${x},${y}`;
-    }).join(' L ');
-    cpuChartPath.setAttribute('d', `M ${pathData} L 100,30 L 0,30 Z`);
+    if(cpuHistory.length > 40) cpuHistory.shift();
     
-    // Update RAM
-    const ramUsedGb = stats.ram.used / (1024 ** 3);
-    const ramTotalGb = stats.ram.total / (1024 ** 3);
-    document.getElementById('ram-usage-text').textContent = `${ramUsedGb.toFixed(2)} GB`;
-    document.getElementById('ram-total-text').textContent = `${ramTotalGb.toFixed(2)} GB Total`;
+    const path = cpuHistory.map((v, i) => `${(i/39)*100},${30-(v/100)*30}`).join(' L ');
+    cpuChartPath.setAttribute('d', `M ${path} L 100,30 L 0,30 Z`);
+    
+    document.getElementById('ram-usage-text').textContent = `${(stats.ram.used/1073741824).toFixed(2)} GB`;
+    document.getElementById('ram-total-text').textContent = `${(stats.ram.total/1073741824).toFixed(2)} GB Total`;
     document.getElementById('ram-progress-bar').style.width = `${stats.ram.percent}%`;
     
-    // Update System Info (only once or if changed)
-    if (document.getElementById('info-hostname').textContent === '--') {
-        document.getElementById('info-hostname').textContent = stats.info.hostname;
-        document.getElementById('info-os').textContent = `${stats.info.platform} ${stats.info.release}`;
-        document.getElementById('info-node').textContent = stats.info.nodeVersion;
-    }
-    const uptime = new Date(stats.info.uptime * 1000).toISOString().substr(11, 8);
-    document.getElementById('info-uptime').textContent = uptime;
+    document.getElementById('info-hostname').textContent = stats.info.hostname;
+    document.getElementById('info-os').textContent = stats.info.platform;
+    document.getElementById('info-node').textContent = stats.info.nodeVersion;
     
-    // Update CPU Cores
-    if (cpuCoresContainer.childElementCount !== stats.cpus.length) {
-        cpuCoresContainer.innerHTML = '';
-        stats.cpus.forEach((core, i) => {
-            const coreEl = document.createElement('div');
-            coreEl.className = 'cpu-core-item';
-            coreEl.innerHTML = `
-                <span class="label">Core ${i}</span>
-                <div class="progress-bar">
-                    <div id="core-bar-${i}" class="progress-bar-inner" style="width: ${core.toFixed(1)}%;"></div>
-                </div>
-            `;
-            cpuCoresContainer.appendChild(coreEl);
-        });
-    } else {
-        stats.cpus.forEach((core, i) => {
-            const bar = document.getElementById(`core-bar-${i}`);
-            if(bar) bar.style.width = `${core.toFixed(1)}%`;
-        });
-    }
-}
-
-function toggleFullscreen() {
-    if (!document.fullscreenElement) document.documentElement.requestFullscreen();
-    else if (document.exitFullscreen) document.exitFullscreen();
+    cpuCoresContainer.innerHTML = '';
+    stats.cpus.forEach((c, i) => {
+        cpuCoresContainer.innerHTML += `
+            <div class="cpu-core-item">
+                <span class="label">C${i}</span>
+                <div class="progress-bar" style="height:6px"><div class="progress-bar-inner" style="width:${c}%"></div></div>
+            </div>`;
+    });
 }
 
 function initializeDashboard() {
   adminSocket = io();
   adminSocket.on('connect', () => {
-    // Re-initialize the currently selected local service upon reconnection
-    const activeService = allServices.find(s => s.uid === activeServerUid);
-    if (activeService?.isLocal) {
-        if (activeService.uid === 'internal-uptime') initializeUptimeMonitor();
-        if (activeService.uid === 'internal-system') adminSocket.emit('system:subscribe');
-    }
+     const active = allServices.find(s => s.uid === activeServerUid);
+     if (active?.isLocal && active.uid === 'internal-system') adminSocket.emit('system:subscribe');
   });
-  // Uptime listeners
+  
   adminSocket.on('uptime:full_list', renderUptimeList);
-  adminSocket.on('uptime:site_added', (newSite) => {
-      const emptyState = uptimeViewContent.querySelector('.empty-uptime');
-      if (emptyState) emptyState.remove();
-      uptimeViewContent.appendChild(createUptimeCard(newSite));
-  });
-  adminSocket.on('uptime:site_removed', (uid) => {
-      document.querySelector(`.uptime-card[data-uid="${uid}"]`)?.remove();
-      if (uptimeViewContent.childElementCount === 0) renderUptimeList({ sites: [], statuses: {} });
-  });
-  adminSocket.on('uptime:update', (updateData) => updateUptimeCard(updateData.uid, updateData));
-  
-  // System status listener
+  adminSocket.on('uptime:site_added', s => renderUptimeList({sites: [s], statuses:{}})); // Simplified reload
+  adminSocket.on('uptime:update', d => updateUptimeCard(d.uid, d));
   adminSocket.on('system-stats', updateSystemStats);
-  
+
   loadServers();
   renderServerList();
+  if(allServices.length) selectServer(allServices[0]);
+
+  // Listeners
+  document.getElementById('add-server-btn').onclick = showModal;
+  document.getElementById('cancel-btn').onclick = hideModal;
+  document.getElementById('server-form').onsubmit = handleFormSubmit;
+  document.getElementById('add-uptime-site-btn').onclick = showUptimeModal;
+  document.getElementById('uptime-cancel-btn').onclick = hideUptimeModal;
+  document.getElementById('uptime-form').onsubmit = (e) => {
+      e.preventDefault();
+      adminSocket.emit('uptime:add_site', {
+          name: document.getElementById('uptime-name').value,
+          url: document.getElementById('uptime-url').value
+      });
+      hideUptimeModal();
+  };
   
-  if (allServices.length > 0) {
-    selectServer(allServices[0]);
-  } else {
-      statusText.textContent = 'No Services';
-      terminalLoader.classList.remove('hidden');
-      loaderAscii.textContent = '(>_<)';
-      loaderText.textContent = 'Không có dịch vụ nào.';
-  }
-
-  // Event Listeners
-  document.getElementById('add-server-btn').addEventListener('click', showModal);
-  document.getElementById('cancel-btn').addEventListener('click', hideModal);
-  serverForm.addEventListener('submit', handleFormSubmit);
-
-  document.getElementById('add-uptime-site-btn').addEventListener('click', showUptimeModal);
-  document.getElementById('uptime-cancel-btn').addEventListener('click', hideUptimeModal);
-  uptimeForm.addEventListener('submit', handleUptimeFormSubmit);
-
-  document.addEventListener('click', (e) => {
-    if (!e.target.closest('.options-btn')) {
-        document.querySelectorAll('.options-menu.show').forEach(m => m.classList.remove('show'));
-    }
-    if (e.target === modalOverlay) hideModal();
-    if (e.target === uptimeModalOverlay) hideUptimeModal();
-  });
-
   term.onData(data => {
-    if (currentSocket && activeTerminalSessionId) {
-        currentSocket.emit('input', { sessionId: activeTerminalSessionId, data });
-    }
+      if (currentSocket && activeTerminalSessionId) currentSocket.emit('input', {sessionId: activeTerminalSessionId, data});
   });
 }
 
-window.addEventListener('load', initializeDashboard);
+window.onload = initializeDashboard;
