@@ -64,10 +64,10 @@ setInterval(() => {
 
 // --- UPTIME MONITOR LOGIC ---
 const HARDCODED_UPTIME_SITES = [
-    { uid: 'hc_site_1', name: 'Server Terminal v1', url: 'https://server-terminal-v1-m4pg.onrender.com', isHardcoded: true },
-    { uid: 'hc_site_2', name: 'Server Terminal v2', url: 'https://server-terminal-v2-lil8.onrender.com', isHardcoded: true },
-    { uid: 'hc_site_3', name: 'Server Terminal v3', url: 'https://server-terminal-v3-iuxk.onrender.com', isHardcoded: true },
-    { uid: 'hc_site_4', name: 'Server Terminal v4', url: 'https://server-terminal-v4.onrender.com', isHardcoded: true },
+    { uid: 'hc_site_1', name: 'Server Terminal v1', url: 'https://server-terminal-vip1.onrender.com', isHardcoded: true },
+    { uid: 'hc_site_2', name: 'Server Terminal v2', url: 'https://server-terminal-vip2.onrender.com', isHardcoded: true },
+    { uid: 'hc_site_3', name: 'Server Terminal v3', url: 'https://server-terminal-vip3.onrender.com', isHardcoded: true },
+    { uid: 'hc_site_4', name: 'Server Terminal v4', url: 'https://server-terminal-vip4.onrender.com', isHardcoded: true },
 ];
 
 let sites = [...HARDCODED_UPTIME_SITES];
