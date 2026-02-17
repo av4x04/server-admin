@@ -41,26 +41,26 @@ const LOCAL_SERVICES = [
 
 const HARDCODED_SERVERS = [
     {
-        uid: 'hardcoded-1', name: 'Terminal-v1', url: 'https://server-terminal-v1-m4pg.onrender.com',
-        description: 'Server-Terminal 🚀', deployHookUrl: 'https://api.render.com/deploy/srv-d5t1h4sr85hc73durba0?key=QxGp3s79mLg',
+        uid: 'hardcoded-1', name: 'Terminal-v1', url: 'https://server-terminal-vip1.onrender.com',
+        description: 'Server-Terminal 🚀', deployHookUrl: 'https://api.render.com/deploy/srv-d6a8pgur433s738i4e60?key=8HSmJvG6OSA',
         isHardcoded: true
     },
     
     {
-        uid: 'hardcoded-2', name: 'Terminal-v2', url: 'https://server-terminal-v2-lil8.onrender.com',
-        description: 'Server-Terminal 🚀', deployHookUrl: 'https://api.render.com/deploy/srv-d3j6ugjipnbc73ekvm0g?key=EDEEiKz3oH8',
+        uid: 'hardcoded-2', name: 'Terminal-v2', url: 'https://server-terminal-vip2.onrender.com',
+        description: 'Server-Terminal 🚀', deployHookUrl: 'https://api.render.com/deploy/srv-d6a8qg2li9vc73ak0j30?key=Z1lRDU0oWRs',
         isHardcoded: true
     },
 
     {
-        uid: 'hardcoded-3', name: 'Terminal-v3', url: 'https://server-terminal-v3-iuxk.onrender.com',
-        description: 'Server-Terminal 🚀', deployHookUrl: 'https://api.render.com/deploy/srv-d5t1qp49c44c739l2r6g?key=2HtI7SXQiSA',
+        uid: 'hardcoded-3', name: 'Terminal-v3', url: 'https://server-terminal-vip3.onrender.com',
+        description: 'Server-Terminal 🚀', deployHookUrl: 'https://api.render.com/deploy/srv-d6a8sfkr85hc738f55gg?key=kkBnCudwIWA',
         isHardcoded: true
     },
 
     {
-        uid: 'hardcoded-4', name: 'Terminal-v4', url: 'https://server-terminal-v4.onrender.com',
-        description: 'Server-Terminal 🚀', deployHookUrl: 'https://api.render.com/deploy/srv-d5t230718n1s73fvei0g?key=-6ymKLG698o',
+        uid: 'hardcoded-4', name: 'Terminal-v4', url: 'https://server-terminal-vip4.onrender.com',
+        description: 'Server-Terminal 🚀', deployHookUrl: 'https://api.render.com/deploy/srv-d6a8tep5pdvs738gvdbg?key=0SECzlgpNso',
         isHardcoded: true
     }
 ];
