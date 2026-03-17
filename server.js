@@ -64,10 +64,12 @@ setInterval(() => {
 
 // --- UPTIME MONITOR LOGIC ---
 const HARDCODED_UPTIME_SITES = [
-    { uid: 'hc_site_1', name: 'Server Terminal v1', url: 'https://server-terminal-vip1.onrender.com', isHardcoded: true },
-    { uid: 'hc_site_2', name: 'Server Terminal v2', url: 'https://server-terminal-vip2.onrender.com', isHardcoded: true },
-    { uid: 'hc_site_3', name: 'Server Terminal v3', url: 'https://server-terminal-vip3.onrender.com', isHardcoded: true },
-    { uid: 'hc_site_4', name: 'Server Terminal v4', url: 'https://server-terminal-vip4.onrender.com', isHardcoded: true },
+    { uid: 'hc_site_1', name: 'Server Admin', url: 'https://server-admin-v1-fp0s.onrender.com', isHardcoded: true },
+    { uid: 'hc_site_2', name: 'Server admin', url: 'https://terminal-admin.netlify.app', isHardcoded: true },
+    { uid: 'hc_site_3', name: 'Server Terminal v1', url: 'https://server-terminal-vip1.onrender.com', isHardcoded: true },
+    { uid: 'hc_site_4', name: 'Server Terminal v2', url: 'https://server-terminal-vip2.onrender.com', isHardcoded: true },
+    { uid: 'hc_site_5', name: 'Server Terminal v3', url: 'https://server-terminal-vip3.onrender.com', isHardcoded: true },
+    { uid: 'hc_site_6', name: 'Server Terminal v4', url: 'https://server-terminal-vip4.onrender.com', isHardcoded: true },
 ];
 
 let sites = [...HARDCODED_UPTIME_SITES];
