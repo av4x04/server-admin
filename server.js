@@ -57,7 +57,7 @@ setInterval(() => {
             platform: os.platform(),
             release: os.release(),
             nodeVersion: process.version,
-            uptime: os.uptime(),
+            uptime: process.uptime(),
         }
     });
 }, 1500);
@@ -120,7 +120,7 @@ io.on('connection', (socket) => {
         socket.emit('system-stats', {
             cpu: 0, cpus: cpus,
             ram: { total: totalMem, used: totalMem - freeMem, percent: ((totalMem - freeMem) / totalMem) * 100 },
-            info: { hostname: 'av4x04@admin', platform: os.platform(), release: os.release(), nodeVersion: process.version, uptime: os.uptime() }
+            info: { hostname: 'av4x04@admin', platform: os.platform(), release: os.release(), nodeVersion: process.version, uptime: process.uptime() }
         });
     });
 
